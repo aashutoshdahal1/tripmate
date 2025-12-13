@@ -22,7 +22,7 @@ const PostDetailsScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { colors, shadows } = useTheme();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState('vlog');
   const [isSaved, setIsSaved] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -51,6 +51,29 @@ const PostDetailsScreen = () => {
       'https://images.pexels.com/photos/1450360/pexels-photo-1450360.jpeg',
       'https://images.pexels.com/photos/1562/italian-landscape-mountains-nature.jpg',
       'https://images.pexels.com/photos/1287460/pexels-photo-1287460.jpeg',
+    ],
+    vlogs: [
+      {
+        id: 1,
+        thumbnail: 'https://images.pexels.com/photos/1450360/pexels-photo-1450360.jpeg',
+        title: 'Sunrise at Sarangkot',
+        duration: '5:23',
+        views: 12400,
+      },
+      {
+        id: 2,
+        thumbnail: 'https://images.pexels.com/photos/1562/italian-landscape-mountains-nature.jpg',
+        title: 'Paragliding Adventure',
+        duration: '8:45',
+        views: 8900,
+      },
+      {
+        id: 3,
+        thumbnail: 'https://images.pexels.com/photos/1287460/pexels-photo-1287460.jpeg',
+        title: 'Peace Pagoda Hike',
+        duration: '6:12',
+        views: 6700,
+      },
     ],
     itinerary: [
       {
@@ -98,7 +121,7 @@ const PostDetailsScreen = () => {
   };
 
   const tabs = [
-    { id: 'overview', label: 'Overview', icon: 'information-circle' },
+    { id: 'vlog', label: 'Vlog', icon: 'play-circle' },
     { id: 'itinerary', label: 'Itinerary', icon: 'map' },
     { id: 'budget', label: 'Budget', icon: 'wallet' },
   ];
@@ -293,48 +316,64 @@ const PostDetailsScreen = () => {
           </View>
 
           {/* Tab Content */}
-          {activeTab === 'overview' && (
+          {activeTab === 'vlog' && (
             <View style={styles.tabContent}>
-              {/* Description */}
+
+
+
+              {/* Vlog Grid */}
               <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>About</Text>
-                <Text style={[styles.description, { color: colors.textSecondary }]}>
-                  Discover the breathtaking beauty of Pokhara, a serene lakeside city nestled in the
-                  Himalayas. Experience paragliding over Phewa Lake, hike to World Peace Pagoda, and
-                  witness stunning sunrises at Sarangkot.
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>
+                  Vlogs ({trip.vlogs.length})
                 </Text>
-              </View>
+                {trip.vlogs.length > 0 ? (
+                  <View style={styles.vlogGrid}>
+                    {trip.vlogs.map((vlog) => (
+                      <TouchableOpacity
+                        key={vlog.id}
+                        style={[styles.vlogCard, { backgroundColor: colors.card }, shadows.sm]}
+                        activeOpacity={0.8}
+                      >
+                        {/* Thumbnail */}
+                        <View style={styles.vlogThumbnail}>
+                          <Image source={{ uri: vlog.thumbnail }} style={styles.vlogImage} />
+                          <LinearGradient
+                            colors={['transparent', 'rgba(0,0,0,0.6)']}
+                            style={styles.vlogGradient}
+                          />
+                          {/* Play Icon */}
+                          <View style={styles.playIconContainer}>
+                            <Ionicons name="play-circle" size={48} color="#FFFFFF" />
+                          </View>
+                          {/* Duration Badge */}
+                          <View style={styles.durationBadge}>
+                            <Text style={styles.durationText}>{vlog.duration}</Text>
+                          </View>
+                        </View>
 
-              {/* Image Gallery */}
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Photos</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.gallery}
-                >
-                  {trip.images.map((img, idx) => (
-                    <View key={idx} style={[styles.galleryImage, shadows.sm]}>
-                      <Image source={{ uri: img }} style={styles.image} />
-                    </View>
-                  ))}
-                </ScrollView>
-              </View>
-
-              {/* What's Included */}
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>What's Included</Text>
-                {[
-                  { icon: 'checkmark-circle', text: '3★ Hotel accommodation', color: '#00C896' },
-                  { icon: 'checkmark-circle', text: 'Daily breakfast', color: '#00C896' },
-                  { icon: 'checkmark-circle', text: 'Local transport', color: '#00C896' },
-                  { icon: 'checkmark-circle', text: 'Professional guide', color: '#00C896' },
-                ].map((item, idx) => (
-                  <View key={idx} style={styles.includeItem}>
-                    <Ionicons name={item.icon} size={20} color={item.color} />
-                    <Text style={[styles.includeText, { color: colors.text }]}>{item.text}</Text>
+                        {/* Vlog Info */}
+                        <View style={styles.vlogInfo}>
+                          <Text style={[styles.vlogTitle, { color: colors.text }]} numberOfLines={2}>
+                            {vlog.title}
+                          </Text>
+                          <View style={styles.vlogStats}>
+                            <Ionicons name="eye-outline" size={14} color={colors.textSecondary} />
+                            <Text style={[styles.vlogViews, { color: colors.textSecondary }]}>
+                              {(vlog.views / 1000).toFixed(1)}k views
+                            </Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
                   </View>
-                ))}
+                ) : (
+                  <View style={styles.emptyVlog}>
+                    <Ionicons name="videocam-outline" size={64} color={colors.textSecondary} />
+                    <Text style={[styles.emptyVlogText, { color: colors.textSecondary }]}>
+                      No vlogs yet. Be the first to share!
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
           )}
@@ -439,31 +478,8 @@ const PostDetailsScreen = () => {
         </View>
 
         {/* Bottom Padding */}
-        <View style={{ height: 100 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
-
-      {/* Fixed Bottom CTA */}
-      <View style={[styles.bottomCTA, { backgroundColor: colors.card }, shadows.lg]}>
-        <View style={styles.ctaLeft}>
-          <Text style={[styles.ctaPrice, { color: colors.text }]}>
-            {trip.currency} {(trip.cost / 1000).toFixed(1)}k
-          </Text>
-          <Text style={[styles.ctaPriceLabel, { color: colors.textSecondary }]}>
-            per person
-          </Text>
-        </View>
-        <TouchableOpacity style={styles.bookButton}>
-          <LinearGradient
-            colors={['#2679FF', '#00C896']}
-            style={styles.bookButtonGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Text style={styles.bookButtonText}>Book Now</Text>
-            <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 };
@@ -784,42 +800,90 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.sm,
     lineHeight: 20,
   },
-  // Bottom CTA
-  bottomCTA: {
+  // Vlog Section
+  addVlogButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+    marginBottom: SPACING.lg,
+  },
+  addVlogText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  vlogGrid: {
+    gap: SPACING.md,
+  },
+  vlogCard: {
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
+    marginBottom: SPACING.sm,
+  },
+  vlogThumbnail: {
+    width: '100%',
+    height: 200,
+    position: 'relative',
+  },
+  vlogImage: {
+    width: '100%',
+    height: '100%',
+  },
+  vlogGradient: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    paddingBottom: SPACING.xl,
+    height: '50%',
   },
-  ctaLeft: {},
-  ctaPrice: {
-    fontSize: FONT_SIZES.xl + 2,
-    fontWeight: FONT_WEIGHTS.bold,
+  playIconContainer: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -24 }, { translateY: -24 }],
   },
-  ctaPriceLabel: {
-    fontSize: FONT_SIZES.sm,
+  durationBadge: {
+    position: 'absolute',
+    bottom: SPACING.sm,
+    right: SPACING.sm,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.sm,
   },
-  bookButton: {
-    borderRadius: BORDER_RADIUS.xl,
-    overflow: 'hidden',
-  },
-  bookButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.xl + SPACING.sm,
-    paddingVertical: SPACING.md + 2,
-  },
-  bookButtonText: {
+  durationText: {
     color: '#FFFFFF',
+    fontSize: FONT_SIZES.xs,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  vlogInfo: {
+    padding: SPACING.md,
+  },
+  vlogTitle: {
     fontSize: FONT_SIZES.md,
-    fontWeight: FONT_WEIGHTS.bold,
+    fontWeight: FONT_WEIGHTS.semibold,
+    marginBottom: SPACING.xs,
+  },
+  vlogStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  vlogViews: {
+    fontSize: FONT_SIZES.xs,
+  },
+  emptyVlog: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.xxl * 2,
+  },
+  emptyVlogText: {
+    fontSize: FONT_SIZES.md,
+    marginTop: SPACING.md,
+    textAlign: 'center',
   },
 });
 
