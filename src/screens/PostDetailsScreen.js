@@ -22,7 +22,7 @@ const PostDetailsScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { colors, shadows } = useTheme();
-  const [activeTab, setActiveTab] = useState('itinerary');
+  const [activeTab, setActiveTab] = useState('overview');
   const [isSaved, setIsSaved] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -156,443 +156,291 @@ const PostDetailsScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Floating Header - Animated on Scroll */}
-      <Animated.View 
-        style={[
-          styles.floatingHeader,
-          { 
-            backgroundColor: colors.card,
-            opacity: headerOpacity,
-          },
-          shadows.md
-        ]}
-      >
+      {/* Simple Header - Always Visible */}
+      <View style={[styles.header, { backgroundColor: colors.card }, shadows.sm]}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-          <Ionicons name="chevron-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-          {trip.title}
+          Trip Details
         </Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.headerButton}>
-            <Ionicons name="share-social-outline" size={22} color={colors.text} />
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-
-      {/* Absolute Top Buttons (Over Image) */}
-      <View style={styles.topButtons}>
-        <TouchableOpacity 
-          onPress={() => navigation.goBack()} 
-          style={[styles.iconButtonLarge, shadows.md]}
-        >
-          <LinearGradient
-            colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.3)']}
-            style={styles.iconGradient}
-          >
-            <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-          </LinearGradient>
+        <TouchableOpacity onPress={handleSave} style={styles.headerButton}>
+          <Ionicons 
+            name={isSaved ? "bookmark" : "bookmark-outline"} 
+            size={24} 
+            color={isSaved ? colors.primary : colors.text} 
+          />
         </TouchableOpacity>
-
-        <View style={styles.topRightButtons}>
-          <TouchableOpacity style={[styles.iconButtonLarge, shadows.md]}>
-            <LinearGradient
-              colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.3)']}
-              style={styles.iconGradient}
-            >
-              <Ionicons name="share-social-outline" size={22} color="#FFFFFF" />
-            </LinearGradient>
-          </TouchableOpacity>
-        </View>
       </View>
 
-      <Animated.ScrollView
-        showsVerticalScrollIndicator={false}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true }
-        )}
-        scrollEventThrottle={16}
-      >
-        {/* Hero Image with Parallax */}
-        <Animated.View 
-          style={[
-            styles.heroContainer,
-            {
-              transform: [
-                { scale: imageScale },
-                { translateY: imageTranslateY },
-              ],
-            },
-          ]}
-        >
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Simple Hero Image */}
+        <View style={styles.imageContainer}>
           <Image
             source={{ uri: trip.images[0] }}
-            style={styles.heroImage}
+            style={styles.mainImage}
             resizeMode="cover"
           />
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.8)']}
-            style={styles.heroGradient}
-            locations={[0, 0.5, 1]}
-          />
-          
-          {/* Hero Content */}
-          <View style={styles.heroContent}>
-            <View style={styles.heroStats}>
-              <View style={styles.statItem}>
-                <Ionicons name="eye" size={16} color="#FFFFFF" />
-                <Text style={styles.statItemText}>{(trip.views / 1000).toFixed(1)}k</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Ionicons name="heart" size={16} color="#FFFFFF" />
-                <Text style={styles.statItemText}>{(trip.likes / 1000).toFixed(1)}k</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Ionicons name="chatbubble" size={16} color="#FFFFFF" />
-                <Text style={styles.statItemText}>{trip.comments}</Text>
-              </View>
-            </View>
+        </View>
 
-            <Text style={styles.heroTitle}>{trip.title}</Text>
-            
-            <View style={styles.heroLocation}>
-              <Ionicons name="location" size={20} color="#00C896" />
-              <Text style={styles.heroLocationText}>
+        {/* Content Container */}
+        <View style={styles.contentContainer}>
+          {/* Title & Location */}
+          <View style={styles.titleSection}>
+            <Text style={[styles.title, { color: colors.text }]}>{trip.title}</Text>
+            <View style={styles.locationRow}>
+              <Ionicons name="location" size={18} color={colors.primary} />
+              <Text style={[styles.locationText, { color: colors.textSecondary }]}>
                 {trip.location}, {trip.country}
               </Text>
             </View>
+          </View>
 
-            <View style={styles.heroBadges}>
-              <View style={styles.heroBadge}>
-                <Ionicons name="calendar-outline" size={14} color="#2679FF" />
-                <Text style={styles.heroBadgeText}>{trip.days} Days</Text>
-              </View>
-              <View style={styles.heroBadge}>
-                <Ionicons name="wallet-outline" size={14} color="#00C896" />
-                <Text style={styles.heroBadgeText}>
-                  {trip.currency} {(trip.cost / 1000).toFixed(1)}k
-                </Text>
-              </View>
+          {/* Quick Info Cards */}
+          <View style={styles.quickInfoRow}>
+            <View style={[styles.infoCard, { backgroundColor: colors.card }, shadows.sm]}>
+              <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Duration</Text>
+              <Text style={[styles.infoValue, { color: colors.text }]}>{trip.days} Days</Text>
+            </View>
+            <View style={[styles.infoCard, { backgroundColor: colors.card }, shadows.sm]}>
+              <Ionicons name="wallet-outline" size={20} color={colors.accent} />
+              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Cost</Text>
+              <Text style={[styles.infoValue, { color: colors.text }]}>
+                {trip.currency} {(trip.cost / 1000).toFixed(1)}k
+              </Text>
             </View>
           </View>
-        </Animated.View>
 
-        {/* Author Card - Floating Over Hero */}
-        <View style={styles.authorCard}>
-          <View style={[styles.authorCardInner, { backgroundColor: colors.card }, shadows.lg]}>
-            <Image
-              source={{ uri: trip.author.avatar }}
-              style={styles.authorAvatar}
-            />
-            <View style={styles.authorDetails}>
+          {/* Author Info */}
+          <TouchableOpacity style={[styles.authorSection, { backgroundColor: colors.card }, shadows.sm]}>
+            <Image source={{ uri: trip.author.avatar }} style={styles.avatar} />
+            <View style={styles.authorInfo}>
               <View style={styles.authorNameRow}>
-                <Text style={[styles.authorName, { color: colors.text }]}>
-                  {trip.author.name}
-                </Text>
+                <Text style={[styles.authorName, { color: colors.text }]}>{trip.author.name}</Text>
                 {trip.author.verified && (
-                  <Ionicons name="checkmark-circle" size={16} color="#2679FF" />
+                  <Ionicons name="checkmark-circle" size={14} color={colors.primary} />
                 )}
               </View>
               <Text style={[styles.authorBio, { color: colors.textSecondary }]}>
                 {trip.author.bio}
               </Text>
             </View>
-            <TouchableOpacity style={[styles.followButton, { backgroundColor: colors.primaryAlpha }]}>
-              <Text style={[styles.followButtonText, { color: colors.primary }]}>Follow</Text>
+            <TouchableOpacity style={[styles.followBtn, { backgroundColor: colors.primary }]}>
+              <Text style={styles.followBtnText}>Follow</Text>
             </TouchableOpacity>
-          </View>
-        </View>
+          </TouchableOpacity>
 
-        {/* Action Buttons - Like, Save, Share */}
-        <View style={styles.actionButtonsContainer}>
-          <Animated.View style={{ transform: [{ scale: likeAnim }] }}>
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                { backgroundColor: isLiked ? '#FFE8E8' : colors.backgroundAlt },
-                shadows.sm,
-              ]}
+          {/* Stats Row */}
+          <View style={styles.statsRow}>
+            <TouchableOpacity 
+              style={styles.statItem}
               onPress={handleLike}
             >
-              <Ionicons
-                name={isLiked ? 'heart' : 'heart-outline'}
-                size={24}
-                color={isLiked ? '#FF3B30' : colors.text}
+              <Ionicons 
+                name={isLiked ? "heart" : "heart-outline"} 
+                size={22} 
+                color={isLiked ? "#FF3B30" : colors.text} 
               />
-              <Text style={[styles.actionButtonText, { color: colors.text }]}>
+              <Text style={[styles.statText, { color: colors.text }]}>
                 {isLiked ? trip.likes + 1 : trip.likes}
               </Text>
             </TouchableOpacity>
-          </Animated.View>
-
-          <Animated.View style={{ transform: [{ scale: saveAnim }] }}>
-            <TouchableOpacity
-              style={[
-                styles.actionButton,
-                { backgroundColor: isSaved ? '#E8F5FF' : colors.backgroundAlt },
-                shadows.sm,
-              ]}
-              onPress={handleSave}
-            >
-              <Ionicons
-                name={isSaved ? 'bookmark' : 'bookmark-outline'}
-                size={24}
-                color={isSaved ? '#2679FF' : colors.text}
-              />
-              <Text style={[styles.actionButtonText, { color: colors.text }]}>
-                {isSaved ? 'Saved' : 'Save'}
-              </Text>
-            </TouchableOpacity>
-          </Animated.View>
-
-          <TouchableOpacity
-            style={[styles.actionButton, { backgroundColor: colors.backgroundAlt }, shadows.sm]}
-          >
-            <Ionicons name="chatbubble-outline" size={24} color={colors.text} />
-            <Text style={[styles.actionButtonText, { color: colors.text }]}>
-              {trip.comments}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Tabs - Modern Segmented Control */}
-        <View style={[styles.tabsContainer, { backgroundColor: colors.backgroundAlt }]}>
-          {tabs.map((tab) => (
-            <TouchableOpacity
-              key={tab.id}
-              style={[
-                styles.tab,
-                activeTab === tab.id && [
-                  styles.activeTab,
-                  { backgroundColor: colors.card },
-                  shadows.sm,
-                ],
-              ]}
-              onPress={() => setActiveTab(tab.id)}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={tab.icon}
-                size={18}
-                color={activeTab === tab.id ? colors.primary : colors.textSecondary}
-              />
-              <Text
-                style={[
-                  styles.tabText,
-                  {
-                    color: activeTab === tab.id ? colors.text : colors.textSecondary,
-                    fontWeight: activeTab === tab.id ? FONT_WEIGHTS.semibold : FONT_WEIGHTS.regular,
-                  },
-                ]}
-              >
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Tab Content */}
-        <View style={styles.content}>
-        {activeTab === 'overview' && (
-          <View style={styles.overviewTab}>
-            {/* Image Gallery */}
-            <View style={styles.sectionContainer}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Gallery</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.galleryScroll}
-              >
-                {trip.images.map((img, idx) => (
-                  <View key={idx} style={[styles.galleryItem, shadows.md]}>
-                    <Image source={{ uri: img }} style={styles.galleryImage} />
-                  </View>
-                ))}
-              </ScrollView>
+            <View style={styles.statItem}>
+              <Ionicons name="chatbubble-outline" size={20} color={colors.text} />
+              <Text style={[styles.statText, { color: colors.text }]}>{trip.comments}</Text>
             </View>
+            <View style={styles.statItem}>
+              <Ionicons name="eye-outline" size={22} color={colors.text} />
+              <Text style={[styles.statText, { color: colors.text }]}>
+                {(trip.views / 1000).toFixed(1)}k
+              </Text>
+            </View>
+            <TouchableOpacity style={styles.statItem}>
+              <Ionicons name="share-social-outline" size={20} color={colors.text} />
+            </TouchableOpacity>
+          </View>
 
-            {/* Highlights */}
-            <View style={styles.sectionContainer}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Highlights</Text>
-              <View style={styles.highlightsGrid}>
-                {[
-                  { icon: 'airplane', label: 'Transport', value: 'Included' },
-                  { icon: 'bed', label: 'Stay', value: '3★ Hotel' },
-                  { icon: 'restaurant', label: 'Meals', value: 'Breakfast' },
-                  { icon: 'people', label: 'Group', value: '2-8 People' },
-                ].map((item, idx) => (
-                  <View
-                    key={idx}
-                    style={[styles.highlightCard, { backgroundColor: colors.card }, shadows.sm]}
-                  >
-                    <View style={[styles.highlightIcon, { backgroundColor: colors.primaryAlpha }]}>
-                      <Ionicons name={item.icon} size={20} color={colors.primary} />
+          {/* Simple Tabs */}
+          <View style={[styles.tabs, { borderBottomColor: colors.border }]}>
+            {tabs.map((tab) => (
+              <TouchableOpacity
+                key={tab.id}
+                style={[
+                  styles.tab,
+                  activeTab === tab.id && [styles.activeTab, { borderBottomColor: colors.primary }],
+                ]}
+                onPress={() => setActiveTab(tab.id)}
+              >
+                <Ionicons
+                  name={tab.icon}
+                  size={20}
+                  color={activeTab === tab.id ? colors.primary : colors.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    {
+                      color: activeTab === tab.id ? colors.primary : colors.textSecondary,
+                      fontWeight: activeTab === tab.id ? FONT_WEIGHTS.semibold : FONT_WEIGHTS.regular,
+                    },
+                  ]}
+                >
+                  {tab.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Tab Content */}
+          {activeTab === 'overview' && (
+            <View style={styles.tabContent}>
+              {/* Description */}
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>About</Text>
+                <Text style={[styles.description, { color: colors.textSecondary }]}>
+                  Discover the breathtaking beauty of Pokhara, a serene lakeside city nestled in the
+                  Himalayas. Experience paragliding over Phewa Lake, hike to World Peace Pagoda, and
+                  witness stunning sunrises at Sarangkot.
+                </Text>
+              </View>
+
+              {/* Image Gallery */}
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Photos</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.gallery}
+                >
+                  {trip.images.map((img, idx) => (
+                    <View key={idx} style={[styles.galleryImage, shadows.sm]}>
+                      <Image source={{ uri: img }} style={styles.image} />
                     </View>
-                    <Text style={[styles.highlightLabel, { color: colors.textSecondary }]}>
-                      {item.label}
-                    </Text>
-                    <Text style={[styles.highlightValue, { color: colors.text }]}>
-                      {item.value}
-                    </Text>
+                  ))}
+                </ScrollView>
+              </View>
+
+              {/* What's Included */}
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>What's Included</Text>
+                {[
+                  { icon: 'checkmark-circle', text: '3★ Hotel accommodation', color: '#00C896' },
+                  { icon: 'checkmark-circle', text: 'Daily breakfast', color: '#00C896' },
+                  { icon: 'checkmark-circle', text: 'Local transport', color: '#00C896' },
+                  { icon: 'checkmark-circle', text: 'Professional guide', color: '#00C896' },
+                ].map((item, idx) => (
+                  <View key={idx} style={styles.includeItem}>
+                    <Ionicons name={item.icon} size={20} color={item.color} />
+                    <Text style={[styles.includeText, { color: colors.text }]}>{item.text}</Text>
                   </View>
                 ))}
               </View>
             </View>
+          )}
 
-            {/* Description */}
-            <View style={styles.sectionContainer}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>About this trip</Text>
-              <Text style={[styles.description, { color: colors.textSecondary }]}>
-                Discover the breathtaking beauty of Pokhara, a serene lakeside city nestled in the
-                Himalayas. Experience paragliding over Phewa Lake, hike to World Peace Pagoda, and
-                witness stunning sunrises at Sarangkot. This 3-day adventure combines thrill,
-                culture, and natural beauty in one unforgettable journey.
-              </Text>
-            </View>
-          </View>
-        )}
+          {activeTab === 'itinerary' && (
+            <View style={styles.tabContent}>
+              {trip.itinerary.map((day, idx) => (
+                <View key={idx} style={styles.dayContainer}>
+                  {/* Day Header */}
+                  <View style={[styles.dayHeader, { backgroundColor: colors.card }, shadows.sm]}>
+                    <View style={[styles.dayBadge, { backgroundColor: colors.primary }]}>
+                      <Text style={styles.dayBadgeText}>Day {day.day}</Text>
+                    </View>
+                    <Text style={[styles.dayTitle, { color: colors.text }]}>{day.title}</Text>
+                  </View>
 
-        {activeTab === 'itinerary' && (
-          <View style={styles.itineraryTab}>
-            {trip.itinerary.map((day, idx) => (
-              <View key={idx} style={styles.daySection}>
-                {/* Day Header - Modern Design */}
-                <View style={styles.dayHeaderNew}>
-                  <View style={styles.dayNumberContainer}>
-                    <LinearGradient
-                      colors={['#2679FF', '#00C896']}
-                      style={styles.dayNumberGradient}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
+                  {/* Activities */}
+                  {day.activities.map((activity, aIdx) => (
+                    <View 
+                      key={aIdx} 
+                      style={[styles.activityItem, { backgroundColor: colors.card }, shadows.sm]}
                     >
-                      <Text style={styles.dayNumber}>{day.day}</Text>
-                    </LinearGradient>
-                    {idx < trip.itinerary.length - 1 && (
-                      <View style={[styles.dayConnector, { backgroundColor: colors.border }]} />
-                    )}
-                  </View>
-                  <View style={styles.dayTitleContainer}>
-                    <Text style={[styles.dayTitleNew, { color: colors.text }]}>{day.title}</Text>
-                    <Text style={[styles.daySubtitle, { color: colors.textSecondary }]}>
-                      {day.activities.length} activities
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Activities - Timeline Style */}
-                {day.activities.map((activity, aIdx) => (
-                  <View key={aIdx} style={styles.activityItemNew}>
-                    <View style={styles.activityLeft}>
-                      <View style={[styles.timeContainer, { backgroundColor: colors.backgroundAlt }]}>
-                        <Ionicons name="time-outline" size={12} color={colors.primary} />
-                        <Text style={[styles.timeTextNew, { color: colors.textSecondary }]}>
+                      <View style={[styles.timeBadge, { backgroundColor: colors.backgroundAlt }]}>
+                        <Ionicons name="time-outline" size={14} color={colors.primary} />
+                        <Text style={[styles.timeText, { color: colors.textSecondary }]}>
                           {activity.time}
                         </Text>
                       </View>
-                    </View>
-                    
-                    <View style={[styles.activityCard, { backgroundColor: colors.card }, shadows.sm]}>
-                      <Text style={[styles.activityNameNew, { color: colors.text }]}>
+                      <Text style={[styles.activityName, { color: colors.text }]}>
                         {activity.activity}
                       </Text>
-                      <View style={styles.activityLocationRow}>
-                        <Ionicons name="location" size={14} color={colors.accent} />
-                        <Text style={[styles.activityLocationNew, { color: colors.textSecondary }]}>
+                      <View style={styles.locationRow}>
+                        <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+                        <Text style={[styles.activityLocation, { color: colors.textSecondary }]}>
                           {activity.location}
                         </Text>
                       </View>
                     </View>
-                  </View>
-                ))}
-              </View>
-            ))}
-          </View>
-        )}
-
-        {activeTab === 'budget' && (
-          <View style={styles.budgetTab}>
-            {/* Total Cost Card - Hero */}
-            <LinearGradient
-              colors={['#2679FF', '#00C896']}
-              style={[styles.totalCostCard, shadows.lg]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <Text style={styles.totalCostLabel}>Total Trip Cost</Text>
-              <Text style={styles.totalCostAmount}>
-                {trip.currency} {trip.budget.total.toLocaleString()}
-              </Text>
-              <View style={styles.perPersonBadge}>
-                <Ionicons name="person" size={14} color="#FFFFFF" />
-                <Text style={styles.perPersonBadgeText}>
-                  {trip.currency} {trip.budget.perPerson.toLocaleString()} per person
-                </Text>
-              </View>
-            </LinearGradient>
-
-            {/* Budget Breakdown */}
-            <View style={styles.sectionContainer}>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Cost Breakdown</Text>
-              
-              {[
-                { label: 'Accommodation', amount: trip.budget.accommodation, icon: 'bed', color: '#2679FF', percent: (trip.budget.accommodation / trip.budget.total * 100).toFixed(0) },
-                { label: 'Food', amount: trip.budget.food, icon: 'restaurant', color: '#00C896', percent: (trip.budget.food / trip.budget.total * 100).toFixed(0) },
-                { label: 'Transport', amount: trip.budget.transport, icon: 'car', color: '#FF9500', percent: (trip.budget.transport / trip.budget.total * 100).toFixed(0) },
-                { label: 'Activities', amount: trip.budget.activities, icon: 'flame', color: '#FF3B30', percent: (trip.budget.activities / trip.budget.total * 100).toFixed(0) },
-              ].map((item, idx) => (
-                <View key={idx} style={[styles.budgetItemNew, { backgroundColor: colors.card }, shadows.sm]}>
-                  <View style={styles.budgetItemHeader}>
-                    <View style={styles.budgetItemLeft}>
-                      <View style={[styles.budgetIconNew, { backgroundColor: item.color + '20' }]}>
-                        <Ionicons name={item.icon} size={20} color={item.color} />
-                      </View>
-                      <View>
-                        <Text style={[styles.budgetLabelNew, { color: colors.text }]}>
-                          {item.label}
-                        </Text>
-                        <Text style={[styles.budgetPercent, { color: colors.textSecondary }]}>
-                          {item.percent}% of total
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={[styles.budgetAmountNew, { color: colors.text }]}>
-                      {trip.currency} {item.amount.toLocaleString()}
-                    </Text>
-                  </View>
-                  {/* Progress Bar */}
-                  <View style={[styles.progressBarContainer, { backgroundColor: colors.backgroundAlt }]}>
-                    <View 
-                      style={[
-                        styles.progressBar,
-                        { width: `${item.percent}%`, backgroundColor: item.color }
-                      ]}
-                    />
-                  </View>
+                  ))}
                 </View>
               ))}
             </View>
+          )}
 
-            {/* Tips Card */}
-            <View style={[styles.tipsCard, { backgroundColor: colors.card }, shadows.sm]}>
-              <View style={styles.tipsHeader}>
-                <Ionicons name="bulb" size={24} color="#FF9500" />
-                <Text style={[styles.tipsTitle, { color: colors.text }]}>Money Saving Tips</Text>
+          {activeTab === 'budget' && (
+            <View style={styles.tabContent}>
+              {/* Total Cost */}
+              <View style={[styles.totalCostContainer, { backgroundColor: colors.primary }]}>
+                <Text style={styles.totalLabel}>Total Cost</Text>
+                <Text style={styles.totalAmount}>
+                  {trip.currency} {trip.budget.total.toLocaleString()}
+                </Text>
+                <Text style={styles.perPersonText}>
+                  {trip.currency} {trip.budget.perPerson.toLocaleString()} per person
+                </Text>
               </View>
-              <Text style={[styles.tipsText, { color: colors.textSecondary }]}>
-                • Book accommodation 2 weeks in advance for better rates{'\n'}
-                • Eat at local restaurants to save on food costs{'\n'}
-                • Use shared transport when possible{'\n'}
-                • Many activities offer group discounts
-              </Text>
+
+              {/* Budget Items */}
+              <View style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.text }]}>Breakdown</Text>
+                {[
+                  { label: 'Accommodation', amount: trip.budget.accommodation, icon: 'bed-outline', color: '#2679FF' },
+                  { label: 'Food', amount: trip.budget.food, icon: 'restaurant-outline', color: '#00C896' },
+                  { label: 'Transport', amount: trip.budget.transport, icon: 'car-outline', color: '#FF9500' },
+                  { label: 'Activities', amount: trip.budget.activities, icon: 'bicycle-outline', color: '#FF3B30' },
+                ].map((item, idx) => (
+                  <View 
+                    key={idx} 
+                    style={[styles.budgetItem, { backgroundColor: colors.card }, shadows.sm]}
+                  >
+                    <View style={[styles.budgetIcon, { backgroundColor: item.color + '20' }]}>
+                      <Ionicons name={item.icon} size={22} color={item.color} />
+                    </View>
+                    <View style={styles.budgetDetails}>
+                      <Text style={[styles.budgetLabel, { color: colors.text }]}>{item.label}</Text>
+                      <Text style={[styles.budgetAmount, { color: colors.textSecondary }]}>
+                        {((item.amount / trip.budget.total) * 100).toFixed(0)}% of total
+                      </Text>
+                    </View>
+                    <Text style={[styles.budgetValue, { color: colors.text }]}>
+                      {trip.currency} {item.amount.toLocaleString()}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Tips */}
+              <View style={[styles.tipsContainer, { backgroundColor: colors.backgroundAlt }]}>
+                <View style={styles.tipsHeader}>
+                  <Ionicons name="bulb-outline" size={20} color={colors.primary} />
+                  <Text style={[styles.tipsTitle, { color: colors.text }]}>Money Saving Tips</Text>
+                </View>
+                <Text style={[styles.tipsText, { color: colors.textSecondary }]}>
+                  • Book accommodation 2 weeks in advance{'\n'}
+                  • Eat at local restaurants{'\n'}
+                  • Use shared transport{'\n'}
+                  • Look for group discounts
+                </Text>
+              </View>
             </View>
-          </View>
-        )}
+          )}
         </View>
 
         {/* Bottom Padding */}
-        <View style={{ height: 120 }} />
-      </Animated.ScrollView>
+        <View style={{ height: 100 }} />
+      </ScrollView>
 
       {/* Fixed Bottom CTA */}
       <View style={[styles.bottomCTA, { backgroundColor: colors.card }, shadows.lg]}>
@@ -624,15 +472,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  // Floating Header (Animated)
-  floatingHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 100,
+  // Simple Header
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     paddingTop: 50,
@@ -640,7 +484,6 @@ const styles = StyleSheet.create({
   headerButton: {
     width: 40,
     height: 40,
-    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -648,143 +491,73 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: FONT_SIZES.lg,
     fontWeight: FONT_WEIGHTS.semibold,
-    marginHorizontal: SPACING.md,
+    textAlign: 'center',
   },
-  headerActions: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  // Top Buttons (Over Image)
-  topButtons: {
-    position: 'absolute',
-    top: 50,
-    left: 0,
-    right: 0,
-    zIndex: 99,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.md,
-  },
-  topRightButtons: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  iconButtonLarge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    overflow: 'hidden',
-  },
-  iconGradient: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // Hero Section
-  heroContainer: {
-    height: height * 0.5,
+  // Image
+  imageContainer: {
     width: width,
+    height: width * 0.75,
   },
-  heroImage: {
+  mainImage: {
     width: '100%',
     height: '100%',
   },
-  heroGradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '100%',
+  // Content
+  contentContainer: {
+    paddingHorizontal: SPACING.lg,
   },
-  heroContent: {
-    position: 'absolute',
-    bottom: SPACING.xl,
-    left: SPACING.lg,
-    right: SPACING.lg,
+  // Title Section
+  titleSection: {
+    paddingVertical: SPACING.lg,
   },
-  heroStats: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    marginBottom: SPACING.md,
+  title: {
+    fontSize: FONT_SIZES.xxl,
+    fontWeight: FONT_WEIGHTS.bold,
+    marginBottom: SPACING.sm,
   },
-  statItem: {
+  locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 4,
-    borderRadius: BORDER_RADIUS.sm,
   },
-  statItemText: {
-    color: '#FFFFFF',
-    fontSize: FONT_SIZES.xs,
-    fontWeight: FONT_WEIGHTS.semibold,
-  },
-  heroTitle: {
-    color: '#FFFFFF',
-    fontSize: FONT_SIZES.xxl + 4,
-    fontWeight: FONT_WEIGHTS.bold,
-    marginBottom: SPACING.sm,
-    lineHeight: 36,
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
-  },
-  heroLocation: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    marginBottom: SPACING.md,
-  },
-  heroLocationText: {
-    color: '#FFFFFF',
+  locationText: {
     fontSize: FONT_SIZES.md,
-    fontWeight: FONT_WEIGHTS.medium,
-    textShadowColor: 'rgba(0, 0, 0, 0.6)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
   },
-  heroBadges: {
+  // Quick Info
+  quickInfoRow: {
     flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  heroBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.lg,
-  },
-  heroBadgeText: {
-    color: '#000000',
-    fontSize: FONT_SIZES.sm,
-    fontWeight: FONT_WEIGHTS.semibold,
-  },
-  // Author Card
-  authorCard: {
-    marginTop: -30,
-    paddingHorizontal: SPACING.lg,
+    gap: SPACING.md,
     marginBottom: SPACING.lg,
   },
-  authorCardInner: {
+  infoCard: {
+    flex: 1,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  infoLabel: {
+    fontSize: FONT_SIZES.xs,
+  },
+  infoValue: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: FONT_WEIGHTS.bold,
+  },
+  // Author
+  authorSection: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.xl,
+    borderRadius: BORDER_RADIUS.lg,
+    marginBottom: SPACING.lg,
     gap: SPACING.md,
   },
-  authorAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
-  authorDetails: {
+  authorInfo: {
     flex: 1,
   },
   authorNameRow: {
@@ -795,48 +568,42 @@ const styles = StyleSheet.create({
   },
   authorName: {
     fontSize: FONT_SIZES.md,
-    fontWeight: FONT_WEIGHTS.bold,
+    fontWeight: FONT_WEIGHTS.semibold,
   },
   authorBio: {
     fontSize: FONT_SIZES.xs,
   },
-  followButton: {
+  followBtn: {
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.lg,
+    borderRadius: BORDER_RADIUS.md,
   },
-  followButtonText: {
+  followBtnText: {
+    color: '#FFFFFF',
     fontSize: FONT_SIZES.sm,
     fontWeight: FONT_WEIGHTS.semibold,
   },
-  // Action Buttons
-  actionButtonsContainer: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-    marginBottom: SPACING.lg,
-  },
-  actionButton: {
-    flex: 1,
+  // Stats
+  statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+    justifyContent: 'space-around',
     paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
+    marginBottom: SPACING.md,
   },
-  actionButtonText: {
-    fontSize: FONT_SIZES.sm,
-    fontWeight: FONT_WEIGHTS.semibold,
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statText: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.medium,
   },
   // Tabs
-  tabsContainer: {
+  tabs: {
     flexDirection: 'row',
-    gap: SPACING.xs,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.xl,
-    marginHorizontal: SPACING.lg,
+    borderBottomWidth: 1,
     marginBottom: SPACING.lg,
   },
   tab: {
@@ -845,240 +612,163 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: SPACING.sm + 2,
-    borderRadius: BORDER_RADIUS.lg,
+    paddingVertical: SPACING.md,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
   activeTab: {
-    // Dynamic styles applied inline
+    // borderBottomColor set inline
   },
-  tabText: {
+  tabLabel: {
     fontSize: FONT_SIZES.sm,
   },
-  // Content
-  content: {
-    paddingHorizontal: SPACING.lg,
+  // Tab Content
+  tabContent: {
+    marginBottom: SPACING.xl,
   },
-  // Overview Tab
-  overviewTab: {},
-  sectionContainer: {
+  section: {
     marginBottom: SPACING.xl,
   },
   sectionTitle: {
-    fontSize: FONT_SIZES.xl,
+    fontSize: FONT_SIZES.lg,
     fontWeight: FONT_WEIGHTS.bold,
     marginBottom: SPACING.md,
-  },
-  galleryScroll: {
-    gap: SPACING.sm,
-  },
-  galleryItem: {
-    width: width * 0.6,
-    height: 200,
-    borderRadius: BORDER_RADIUS.xl,
-    overflow: 'hidden',
-  },
-  galleryImage: {
-    width: '100%',
-    height: '100%',
-  },
-  highlightsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
-  },
-  highlightCard: {
-    width: (width - SPACING.lg * 2 - SPACING.sm) / 2,
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
-    alignItems: 'center',
-  },
-  highlightIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  highlightLabel: {
-    fontSize: FONT_SIZES.xs,
-    marginBottom: 2,
-  },
-  highlightValue: {
-    fontSize: FONT_SIZES.sm,
-    fontWeight: FONT_WEIGHTS.semibold,
   },
   description: {
     fontSize: FONT_SIZES.md,
     lineHeight: 22,
   },
-  // Itinerary Tab
-  itineraryTab: {
-    gap: SPACING.xl,
+  // Gallery
+  gallery: {
+    gap: SPACING.sm,
   },
-  daySection: {
+  galleryImage: {
+    width: width * 0.65,
+    height: 200,
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
+  },
+  // Include Items
+  includeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  includeText: {
+    fontSize: FONT_SIZES.md,
+  },
+  // Itinerary
+  dayContainer: {
+    marginBottom: SPACING.xl,
+  },
+  dayHeader: {
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
     marginBottom: SPACING.md,
   },
-  dayHeaderNew: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: SPACING.lg,
-    gap: SPACING.md,
+  dayBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.xs,
   },
-  dayNumberContainer: {
-    alignItems: 'center',
-  },
-  dayNumberGradient: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dayNumber: {
+  dayBadgeText: {
     color: '#FFFFFF',
-    fontSize: FONT_SIZES.xl,
-    fontWeight: FONT_WEIGHTS.bold,
+    fontSize: FONT_SIZES.xs,
+    fontWeight: FONT_WEIGHTS.semibold,
   },
-  dayConnector: {
-    width: 2,
-    flex: 1,
-    minHeight: 40,
-    marginTop: SPACING.xs,
-  },
-  dayTitleContainer: {
-    flex: 1,
-    paddingTop: SPACING.xs,
-  },
-  dayTitleNew: {
+  dayTitle: {
     fontSize: FONT_SIZES.lg,
     fontWeight: FONT_WEIGHTS.bold,
-    marginBottom: 4,
   },
-  daySubtitle: {
-    fontSize: FONT_SIZES.sm,
+  activityItem: {
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+    marginBottom: SPACING.sm,
   },
-  activityItemNew: {
-    flexDirection: 'row',
-    marginBottom: SPACING.md,
-    paddingLeft: SPACING.xxl + SPACING.md,
-    gap: SPACING.md,
-  },
-  activityLeft: {
-    paddingTop: 2,
-  },
-  timeContainer: {
+  timeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    alignSelf: 'flex-start',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 4,
     borderRadius: BORDER_RADIUS.sm,
+    marginBottom: SPACING.xs,
   },
-  timeTextNew: {
+  timeText: {
     fontSize: FONT_SIZES.xs,
-    fontWeight: FONT_WEIGHTS.medium,
   },
-  activityCard: {
-    flex: 1,
-    padding: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
-  },
-  activityNameNew: {
+  activityName: {
     fontSize: FONT_SIZES.md,
     fontWeight: FONT_WEIGHTS.semibold,
     marginBottom: SPACING.xs,
   },
-  activityLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  activityLocationNew: {
+  activityLocation: {
     fontSize: FONT_SIZES.sm,
   },
-  // Budget Tab
-  budgetTab: {},
-  totalCostCard: {
+  // Budget
+  totalCostContainer: {
     padding: SPACING.xl,
-    borderRadius: BORDER_RADIUS.xl,
+    borderRadius: BORDER_RADIUS.lg,
     alignItems: 'center',
     marginBottom: SPACING.xl,
   },
-  totalCostLabel: {
+  totalLabel: {
     color: 'rgba(255, 255, 255, 0.9)',
     fontSize: FONT_SIZES.sm,
-    fontWeight: FONT_WEIGHTS.medium,
     marginBottom: SPACING.xs,
   },
-  totalCostAmount: {
+  totalAmount: {
     color: '#FFFFFF',
-    fontSize: 40,
+    fontSize: 36,
     fontWeight: FONT_WEIGHTS.bold,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.xs,
   },
-  perPersonBadge: {
+  perPersonText: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: FONT_SIZES.sm,
+  },
+  budgetItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.lg,
-  },
-  perPersonBadgeText: {
-    color: '#FFFFFF',
-    fontSize: FONT_SIZES.sm,
-    fontWeight: FONT_WEIGHTS.semibold,
-  },
-  budgetItemNew: {
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.lg,
     marginBottom: SPACING.sm,
-  },
-  budgetItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  budgetItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: SPACING.md,
   },
-  budgetIconNew: {
-    width: 40,
-    height: 40,
+  budgetIcon: {
+    width: 44,
+    height: 44,
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  budgetLabelNew: {
+  budgetDetails: {
+    flex: 1,
+  },
+  budgetLabel: {
     fontSize: FONT_SIZES.md,
     fontWeight: FONT_WEIGHTS.semibold,
     marginBottom: 2,
   },
-  budgetPercent: {
+  budgetAmount: {
     fontSize: FONT_SIZES.xs,
   },
-  budgetAmountNew: {
+  budgetValue: {
     fontSize: FONT_SIZES.lg,
     fontWeight: FONT_WEIGHTS.bold,
   },
-  progressBarContainer: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  tipsCard: {
+  // Tips
+  tipsContainer: {
     padding: SPACING.lg,
-    borderRadius: BORDER_RADIUS.xl,
-    marginTop: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
   },
   tipsHeader: {
     flexDirection: 'row',
@@ -1087,8 +777,8 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   tipsTitle: {
-    fontSize: FONT_SIZES.lg,
-    fontWeight: FONT_WEIGHTS.bold,
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.semibold,
   },
   tipsText: {
     fontSize: FONT_SIZES.sm,

@@ -87,7 +87,6 @@ const HomeScreen = () => {
   const flatListRef = useRef(null); // Reference to FlatList
   
   // Animation refs
-  const pulseAnim = useRef(new Animated.Value(1)).current;
   const likeAnimRefs = useRef({});
   const saveAnimRefs = useRef({});
   const overlayAnimRefs = useRef({}); // Animation for overlay show/hide
@@ -101,40 +100,6 @@ const HomeScreen = () => {
   const lastTap = useRef(null);
 
   // 📹 VIDEO AUTOPLAY RECOMMENDATION:
-  // Replace <Image> with expo-av <Video> component
-  // Set: shouldPlay={true}, isLooping={true}, isMuted={true}
-  // Add play/pause on tap, visible indicator on mute state
-  // This creates instant visual hook and engagement
-
-  useEffect(() => {
-    // Subtle pulse animation for upload button (idle nudge)
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.08,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    
-    // Start pulse after 3 seconds of idle
-    const timer = setTimeout(() => {
-      pulse.start();
-    }, 3000);
-
-    return () => {
-      clearTimeout(timer);
-      pulse.stop();
-    };
-  }, [pulseAnim]);
-
-  // Initialize animation values for each trip
   const getAnimValue = (tripId, type) => {
     const refs = type === 'like' ? likeAnimRefs : saveAnimRefs;
     if (!refs.current[tripId]) {
@@ -150,15 +115,6 @@ const HomeScreen = () => {
       baseScaleRefs.current[tripId] = 1;
     }
     return scaleAnimRefs.current[tripId];
-  };
-
-  // Get or create overlay animation value
-  const getOverlayAnimValue = (tripId) => {
-    if (!overlayAnimRefs.current[tripId]) {
-      // All overlays start visible
-      overlayAnimRefs.current[tripId] = new Animated.Value(1);
-    }
-    return overlayAnimRefs.current[tripId];
   };
 
   // Get or create card entrance animation value
@@ -275,40 +231,59 @@ const HomeScreen = () => {
     },
   ];
 
-  // Initialize overlays - all videos visible
+  const firstTripId = trips[0]?.id;
+
+  // Get or create overlay animation value
+  const getOverlayAnimValue = (tripId) => {
+    if (!overlayAnimRefs.current[tripId]) {
+      // Check if this is the first trip - start visible (1), otherwise hidden (0)
+      const isFirstTrip = tripId === firstTripId;
+      overlayAnimRefs.current[tripId] = new Animated.Value(isFirstTrip ? 1 : 0);
+    }
+    return overlayAnimRefs.current[tripId];
+  };
+
+  // Initialize overlays - first video visible, others hidden
   useEffect(() => {
     const initialOverlays = {};
-    trips.forEach((trip) => {
-      initialOverlays[trip.id] = true; // All overlays visible
+    trips.forEach((trip, index) => {
+      initialOverlays[trip.id] = index === 0; // Only first video visible
     });
     setShowOverlays(initialOverlays);
+
+    // Hide first video overlay after 3 seconds
+    const timer = setTimeout(() => {
+      if (trips.length > 0) {
+        const firstTripId = trips[0].id;
+        const overlayAnim = getOverlayAnimValue(firstTripId);
+        
+        // Animate out
+        Animated.spring(overlayAnim, {
+          toValue: 0,
+          useNativeDriver: true,
+          friction: 8,
+          tension: 50,
+        }).start();
+        
+        // Update state
+        setShowOverlays(prev => ({
+          ...prev,
+          [firstTripId]: false
+        }));
+      }
+    }, 3000);
+
+    // Cleanup on unmount
+    return () => {
+      clearTimeout(timer);
+    };
   }, []); // Run once on mount
 
   const handleTripPress = (trip) => {
     navigation.navigate('PostDetails', { tripId: trip.id });
   };
 
-  const handleUpload = () => {
-    // Add delightful press animation
-    Animated.sequence([
-      Animated.spring(pulseAnim, {
-        toValue: 0.9,
-        friction: 5,
-        tension: 200,
-        useNativeDriver: true,
-      }),
-      Animated.spring(pulseAnim, {
-        toValue: 1,
-        friction: 5,
-        tension: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      navigation.navigate('CreatePost');
-    });
-  };
-
-  // Double-tap to like with animation
+  // Double-tap to like with animation, Single-tap to toggle overlay
   const handleDoubleTap = (tripId) => {
     const now = Date.now();
     const DOUBLE_TAP_DELAY = 250; // Reduced for better responsiveness
@@ -321,8 +296,34 @@ const HomeScreen = () => {
         prev.includes(tripId) ? prev : [...prev, tripId]
       );
     } else {
-      // First tap - just wait for potential double tap
+      // First tap - wait to see if there's a second tap
       lastTap.current = now;
+      
+      // Set a timeout to handle single tap after delay
+      setTimeout(() => {
+        if (lastTap.current === now) {
+          // No double-tap detected, this was a single tap
+          lastTap.current = null; // Reset
+          
+          // Toggle overlay with animation
+          const overlayAnim = getOverlayAnimValue(tripId);
+          const isCurrentlyVisible = showOverlays[tripId];
+          
+          // Animate out or in
+          Animated.spring(overlayAnim, {
+            toValue: isCurrentlyVisible ? 0 : 1,
+            useNativeDriver: true,
+            friction: 8,
+            tension: 50,
+          }).start();
+          
+          // Update state
+          setShowOverlays(prev => ({
+            ...prev,
+            [tripId]: !isCurrentlyVisible
+          }));
+        }
+      }, DOUBLE_TAP_DELAY);
     }
   };
 
@@ -554,10 +555,102 @@ const HomeScreen = () => {
             </Animated.View>
           </PinchGestureHandler>
 
-          {/* Card Body - Absolutely Positioned Over Video - Always Visible */}
+          {/* Profile & Actions - Always Visible at Bottom */}
           <View
-            style={styles.cardBodyOverlay}
-            pointerEvents="auto"
+            style={styles.alwaysVisibleOverlay}
+            pointerEvents="box-none"
+          >
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.85)']}
+              style={styles.bottomGradient}
+              locations={[0, 0.6, 1]}
+              pointerEvents="box-none"
+            >
+              {/* Author & Interactions - Always Visible */}
+              <View style={styles.interactionRow}>
+                {/* Author Info */}
+                <TouchableOpacity style={styles.authorInfo} activeOpacity={0.7}>
+                  {trip.isAISuggestion ? (
+                    <View style={[styles.aiAvatar, { backgroundColor: 'rgba(0,200,150,0.25)', borderWidth: 1.5, borderColor: colors.accent }]}>
+                      <Ionicons name="sparkles" size={14} color={colors.accent} />
+                    </View>
+                  ) : (
+                    <Image
+                      source={{ uri: trip.author.avatar }}
+                      style={styles.authorAvatar}
+                    />
+                  )}
+                  <Text style={styles.authorName} numberOfLines={1}>
+                    {trip.author.name}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Interaction Buttons - Always Visible */}
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleLikeButton(trip.id);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons 
+                      name={likedTrips.includes(trip.id) ? "heart" : "heart-outline"} 
+                      size={22} 
+                      color={likedTrips.includes(trip.id) ? "#FF3B30" : "#FFFFFF"}
+                    />
+                    <Text style={[
+                      styles.actionText, 
+                      { color: likedTrips.includes(trip.id) ? "#FF3B30" : "#FFFFFF" }
+                    ]}>
+                      {formatNumber(trip.likes + (likedTrips.includes(trip.id) ? 1 : 0))}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      // Navigate to comments in future
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="chatbubble-outline" size={20} color="#FFFFFF" />
+                    <Text style={[styles.actionText, { color: '#FFFFFF' }]}>
+                      {trip.comments}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={(e) => e.stopPropagation()}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="share-social-outline" size={20} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </LinearGradient>
+          </View>
+
+          {/* Title and Map Preview - Toggle with Single Tap */}
+          <Animated.View
+            style={[
+              styles.titleOverlay,
+              {
+                opacity: getOverlayAnimValue(trip.id),
+                transform: [
+                  {
+                    translateY: getOverlayAnimValue(trip.id).interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [100, 0], // Slide up from bottom
+                    }),
+                  },
+                ],
+              },
+            ]}
+            pointerEvents={showOverlays[trip.id] ? 'auto' : 'none'}
           >
             <TouchableOpacity
               style={{ flex: 1 }}
@@ -565,9 +658,9 @@ const HomeScreen = () => {
               activeOpacity={0.98}
             >
               <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.85)']}
-                style={styles.cardBody}
-                locations={[0, 0.6, 1]}
+                colors={['transparent', 'rgba(0,0,0,0.3)']}
+                style={styles.titleGradient}
+                locations={[0, 1]}
               >
                 {/* Trip Title - Bold, Scannable */}
                 <Text style={styles.tripTitle} numberOfLines={2}>
@@ -591,75 +684,9 @@ const HomeScreen = () => {
                   </Text>
                   <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.8)" />
                 </TouchableOpacity>
-
-                {/* Author & Interactions - Balanced Layout */}
-                <View style={styles.interactionRow}>
-                  {/* Author Info */}
-                  <TouchableOpacity style={styles.authorInfo} activeOpacity={0.7}>
-                    {trip.isAISuggestion ? (
-                      <View style={[styles.aiAvatar, { backgroundColor: 'rgba(0,200,150,0.25)', borderWidth: 1.5, borderColor: colors.accent }]}>
-                        <Ionicons name="sparkles" size={14} color={colors.accent} />
-                      </View>
-                    ) : (
-                      <Image
-                        source={{ uri: trip.author.avatar }}
-                        style={styles.authorAvatar}
-                      />
-                    )}
-                    <Text style={styles.authorName} numberOfLines={1}>
-                      {trip.author.name}
-                    </Text>
-                  </TouchableOpacity>
-
-                  {/* Interaction Buttons - Glass Morphism - Always Visible */}
-                  <View style={styles.actionButtons}>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleLikeButton(trip.id);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons 
-                        name={likedTrips.includes(trip.id) ? "heart" : "heart-outline"} 
-                        size={22} 
-                        color={likedTrips.includes(trip.id) ? "#FF3B30" : "#FFFFFF"}
-                      />
-                      <Text style={[
-                        styles.actionText, 
-                        { color: likedTrips.includes(trip.id) ? "#FF3B30" : "#FFFFFF" }
-                      ]}>
-                        {formatNumber(trip.likes + (likedTrips.includes(trip.id) ? 1 : 0))}
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        // Navigate to comments in future
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="chatbubble-outline" size={20} color="#FFFFFF" />
-                      <Text style={[styles.actionText, { color: '#FFFFFF' }]}>
-                        {trip.comments}
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={(e) => e.stopPropagation()}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="share-social-outline" size={20} color="#FFFFFF" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
               </LinearGradient>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </Animated.View>
       </View>
     );
@@ -857,19 +884,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 10,
   },
-  // Card Body Overlay - Absolutely positioned over video
-  cardBodyOverlay: {
+  // Always visible section at bottom
+  alwaysVisibleOverlay: {
     position: 'absolute',
-    bottom: 0,
+    bottom: 60,
     left: 0,
     right: 0,
+    zIndex: 6,
+  },
+  bottomGradient: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 20,
+    justifyContent: 'flex-end',
+  },
+  // Title overlay - toggles with single tap
+  titleOverlay: {
+    position: 'absolute',
+    bottom: 150, // Position above the always-visible section
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
     zIndex: 5,
   },
-  // Card Body - Glass Morphism Gradient at Bottom
-  cardBody: {
-    padding: SPACING.lg,
-    paddingTop: SPACING.xl * 3,
-    paddingBottom: SPACING.xl * 2 + 40, // Move up higher from bottom
+  titleGradient: {
+    paddingVertical: 16,
   },
   tripTitle: {
     color: '#FFFFFF',
