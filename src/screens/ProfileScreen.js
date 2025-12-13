@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   FlatList,
+  Image,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +15,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
 import { BORDER_RADIUS, SPACING, FONT_SIZES, FONT_WEIGHTS } from '../constants/colors';
+
+const { width } = Dimensions.get('window');
 
 const ProfileScreen = () => {
   const navigation = useNavigation();
@@ -23,10 +27,12 @@ const ProfileScreen = () => {
     name: 'Sarah Chen',
     username: '@sarahexplores',
     bio: 'Travel enthusiast 🌍 | Adventure seeker ⛰️ | Food lover 🍜',
+    avatar: 'https://i.pravatar.cc/150?img=1',
+    coverImage: 'https://images.pexels.com/photos/1450360/pexels-photo-1450360.jpeg',
     stats: {
       trips: 24,
-      likes: 15600,
-      bookmarks: 89,
+      followers: 3420,
+      following: 892,
     },
   };
 
@@ -37,142 +43,163 @@ const ProfileScreen = () => {
   ];
 
   const myTrips = [
-    { id: 1, location: 'Pokhara', cost: 12500, days: 3, likes: 1240 },
-    { id: 2, location: 'Kathmandu', cost: 25000, days: 5, likes: 890 },
-    { id: 3, location: 'Chitwan', cost: 8500, days: 2, likes: 567 },
+    { 
+      id: 1, 
+      location: 'Pokhara, Nepal', 
+      image: 'https://images.pexels.com/photos/1450360/pexels-photo-1450360.jpeg',
+      days: 3, 
+      likes: 1240,
+      date: 'Dec 2024',
+    },
+    { 
+      id: 2, 
+      location: 'Kathmandu, Nepal', 
+      image: 'https://images.pexels.com/photos/1562/italian-landscape-mountains-nature.jpg',
+      days: 5, 
+      likes: 890,
+      date: 'Nov 2024',
+    },
+    { 
+      id: 3, 
+      location: 'Chitwan, Nepal', 
+      image: 'https://images.pexels.com/photos/1287460/pexels-photo-1287460.jpeg',
+      days: 2, 
+      likes: 567,
+      date: 'Oct 2024',
+    },
   ];
 
   const renderTripItem = ({ item }) => (
     <TouchableOpacity
-      style={[styles.tripItem, { backgroundColor: colors.card }, shadows.sm]}
+      style={[styles.tripCard, shadows.sm]}
       onPress={() => navigation.navigate('PostDetails', { tripId: item.id })}
+      activeOpacity={0.9}
     >
-      <View style={[styles.tripThumb, { backgroundColor: colors.backgroundAlt }]}>
-        <Ionicons name="image" size={32} color={colors.textLight} />
-      </View>
-      <View style={styles.tripInfo}>
-        <Text style={[styles.tripLocation, { color: colors.text }]}>{item.location}</Text>
-        <View style={styles.tripMeta}>
-          <View style={styles.metaItem}>
-            <Ionicons name="calendar" size={12} color={colors.primary} />
-            <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-              {item.days} days
-            </Text>
+      <Image source={{ uri: item.image }} style={styles.tripImage} />
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.7)']}
+        style={styles.tripGradient}
+      >
+        <View style={styles.tripCardContent}>
+          <Text style={styles.tripLocation} numberOfLines={1}>{item.location}</Text>
+          <View style={styles.tripCardMeta}>
+            <View style={styles.tripMetaItem}>
+              <Ionicons name="calendar-outline" size={14} color="#FFFFFF" />
+              <Text style={styles.tripMetaText}>{item.days} days</Text>
+            </View>
+            <View style={styles.tripMetaItem}>
+              <Ionicons name="time-outline" size={14} color="#FFFFFF" />
+              <Text style={styles.tripMetaText}>{item.date}</Text>
+            </View>
           </View>
-          <View style={styles.metaItem}>
-            <Ionicons name="cash" size={12} color={colors.accent} />
-            <Text style={[styles.metaText, { color: colors.textSecondary }]}>
-              NPR {item.cost.toLocaleString()}
-            </Text>
+          <View style={styles.tripLikes}>
+            <Ionicons name="heart" size={14} color="#FF3B30" />
+            <Text style={styles.tripLikesText}>{item.likes}</Text>
           </View>
         </View>
-      </View>
-      <View style={styles.likesContainer}>
-        <Ionicons name="heart" size={16} color="#FF4757" />
-        <Text style={[styles.likesCount, { color: colors.text }]}>{item.likes}</Text>
-      </View>
+      </LinearGradient>
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <Text style={[styles.username, { color: colors.text }]}>{profile.username}</Text>
+        {/* Cover Image & Header */}
+        <View style={styles.coverContainer}>
+          <Image source={{ uri: profile.coverImage }} style={styles.coverImage} />
+          <LinearGradient
+            colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.7)']}
+            style={styles.coverGradient}
+          />
+          
+          {/* Header Buttons */}
+          <View style={styles.headerButtons}>
+            <TouchableOpacity 
+              style={[styles.headerIconButton, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.headerIconButton, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
+              onPress={() => navigation.navigate('Settings')}
+            >
+              <Ionicons name="settings-outline" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => navigation.navigate('Settings')}>
-            <Ionicons name="settings-outline" size={24} color={colors.text} />
-          </TouchableOpacity>
+
+          {/* Profile Avatar - Overlapping */}
+          <View style={styles.avatarContainer}>
+            <View style={[styles.avatarWrapper, { borderColor: colors.background }]}>
+              <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+            </View>
+          </View>
         </View>
 
         {/* Profile Info */}
-        <View style={styles.profileSection}>
-          <LinearGradient
-            colors={[colors.primary, colors.primaryDark]}
-            style={styles.avatar}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          >
-            <Text style={styles.avatarText}>{profile.name.charAt(0)}</Text>
-          </LinearGradient>
-
+        <View style={styles.profileInfo}>
           <Text style={[styles.name, { color: colors.text }]}>{profile.name}</Text>
-          <Text style={[styles.bio, { color: colors.textSecondary }]}>{profile.bio}</Text>
+          <Text style={[styles.username, { color: colors.textSecondary }]}>{profile.username}</Text>
+          <Text style={[styles.bio, { color: colors.text }]}>{profile.bio}</Text>
 
-          {/* Stats */}
-          <View style={[styles.statsContainer, { backgroundColor: colors.card }, shadows.sm]}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.text }]}>
+          {/* Action Buttons */}
+          <View style={styles.actionButtons}>
+            <TouchableOpacity style={[styles.editButton, { backgroundColor: colors.primary }]}>
+              <Ionicons name="create-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.editButtonText}>Edit Profile</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.iconButton, { backgroundColor: colors.card }, shadows.sm]}
+            >
+              <Ionicons name="share-social-outline" size={20} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Stats Row */}
+          <View style={styles.statsRow}>
+            <TouchableOpacity style={styles.stat}>
+              <Text style={[styles.statNumber, { color: colors.text }]}>
                 {profile.stats.trips}
               </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Trips</Text>
-            </View>
-            <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.text }]}>
-                {(profile.stats.likes / 1000).toFixed(1)}K
-              </Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Likes</Text>
-            </View>
-            <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: colors.text }]}>
-                {profile.stats.bookmarks}
-              </Text>
-              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Saved</Text>
-            </View>
-          </View>
-
-          {/* Action Buttons */}
-          <View style={styles.actionsRow}>
-            <TouchableOpacity style={styles.editButton}>
-              <LinearGradient
-                colors={[colors.primary, colors.primaryDark]}
-                style={styles.editGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-              >
-                <Ionicons name="create-outline" size={18} color="#FFFFFF" />
-                <Text style={styles.editText}>Edit Profile</Text>
-              </LinearGradient>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.shareButton, { backgroundColor: colors.card }]}
-            >
-              <Ionicons name="share-social-outline" size={18} color={colors.text} />
+            <TouchableOpacity style={styles.stat}>
+              <Text style={[styles.statNumber, { color: colors.text }]}>
+                {(profile.stats.followers / 1000).toFixed(1)}k
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Followers</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.stat}>
+              <Text style={[styles.statNumber, { color: colors.text }]}>
+                {profile.stats.following}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Following</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* Tabs */}
-        <View style={[styles.tabsContainer, { backgroundColor: colors.card }]}>
+        <View style={[styles.tabs, { borderBottomColor: colors.border }]}>
           {tabs.map((tab) => (
             <TouchableOpacity
               key={tab.id}
               style={[
                 styles.tab,
-                activeTab === tab.id && {
-                  borderBottomColor: colors.primary,
-                  borderBottomWidth: 2,
-                },
+                activeTab === tab.id && { borderBottomColor: colors.primary },
               ]}
               onPress={() => setActiveTab(tab.id)}
             >
               <Ionicons
                 name={tab.icon}
-                size={18}
-                color={activeTab === tab.id ? colors.primary : colors.textLight}
+                size={20}
+                color={activeTab === tab.id ? colors.primary : colors.textSecondary}
               />
               <Text
                 style={[
                   styles.tabText,
                   {
-                    color: activeTab === tab.id ? colors.primary : colors.textLight,
-                    fontWeight:
-                      activeTab === tab.id ? FONT_WEIGHTS.semibold : FONT_WEIGHTS.regular,
+                    color: activeTab === tab.id ? colors.primary : colors.textSecondary,
+                    fontWeight: activeTab === tab.id ? FONT_WEIGHTS.semibold : FONT_WEIGHTS.regular,
                   },
                 ]}
               >
@@ -185,12 +212,13 @@ const ProfileScreen = () => {
         {/* Content */}
         <View style={styles.content}>
           {activeTab === 'trips' && (
-            <FlatList
-              data={myTrips}
-              renderItem={renderTripItem}
-              keyExtractor={(item) => item.id.toString()}
-              scrollEnabled={false}
-            />
+            <View style={styles.tripsGrid}>
+              {myTrips.map((item) => (
+                <View key={item.id}>
+                  {renderTripItem({ item })}
+                </View>
+              ))}
+            </View>
           )}
 
           {activeTab === 'saved' && (
@@ -214,7 +242,7 @@ const ProfileScreen = () => {
           )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -222,158 +250,199 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
+  // Cover Section
+  coverContainer: {
+    position: 'relative',
+  },
+  coverImage: {
+    width: width,
+    height: 220,
+  },
+  coverGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  headerButtons: {
+    position: 'absolute',
+    top: 50,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
   },
-  headerLeft: {},
-  username: {
-    fontSize: FONT_SIZES.xl,
-    fontWeight: FONT_WEIGHTS.bold,
-  },
-  profileSection: {
+  headerIconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.xl,
+  },
+  avatarContainer: {
+    position: 'absolute',
+    bottom: -50,
+    left: SPACING.lg,
+  },
+  avatarWrapper: {
+    borderWidth: 4,
+    borderRadius: 60,
+    padding: 3,
   },
   avatar: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
   },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: FONT_SIZES.xxxl,
-    fontWeight: FONT_WEIGHTS.bold,
+  // Profile Info
+  profileInfo: {
+    paddingTop: 60,
+    paddingHorizontal: SPACING.lg,
   },
   name: {
     fontSize: FONT_SIZES.xxl,
     fontWeight: FONT_WEIGHTS.bold,
-    marginBottom: SPACING.xs,
+    marginBottom: 4,
+  },
+  username: {
+    fontSize: FONT_SIZES.md,
+    marginBottom: SPACING.sm,
   },
   bio: {
     fontSize: FONT_SIZES.md,
-    textAlign: 'center',
+    lineHeight: 20,
     marginBottom: SPACING.lg,
   },
-  statsContainer: {
+  // Action Buttons
+  actionButtons: {
     flexDirection: 'row',
-    width: '100%',
-    padding: SPACING.lg,
-    borderRadius: BORDER_RADIUS.lg,
-    marginBottom: SPACING.lg,
-  },
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: FONT_SIZES.xxl,
-    fontWeight: FONT_WEIGHTS.bold,
-    marginBottom: SPACING.xs,
-  },
-  statLabel: {
-    fontSize: FONT_SIZES.sm,
-  },
-  statDivider: {
-    width: 1,
-    height: '100%',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    width: '100%',
     gap: SPACING.sm,
+    marginBottom: SPACING.lg,
   },
   editButton: {
     flex: 1,
-  },
-  editGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: SPACING.xs,
-    paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
+    paddingVertical: SPACING.sm + 2,
+    borderRadius: BORDER_RADIUS.md,
   },
-  editText: {
+  editButtonText: {
     color: '#FFFFFF',
     fontSize: FONT_SIZES.md,
     fontWeight: FONT_WEIGHTS.semibold,
   },
-  shareButton: {
-    width: 48,
-    height: 48,
-    borderRadius: BORDER_RADIUS.lg,
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: BORDER_RADIUS.md,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  tabsContainer: {
+  // Stats
+  statsRow: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: SPACING.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: 'transparent',
+  },
+  stat: {
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: FONT_WEIGHTS.bold,
+    marginBottom: 2,
+  },
+  statLabel: {
+    fontSize: FONT_SIZES.sm,
+  },
+  // Tabs
+  tabs: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
   },
   tab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: SPACING.xs,
+    gap: 6,
     paddingVertical: SPACING.md,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
   tabText: {
     fontSize: FONT_SIZES.sm,
   },
+  // Content
   content: {
-    padding: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.lg,
   },
-  tripItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: SPACING.md,
+  tripsGrid: {
+    gap: SPACING.md,
+  },
+  // Trip Card
+  tripCard: {
     borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
     marginBottom: SPACING.md,
+    height: 200,
   },
-  tripThumb: {
-    width: 60,
-    height: 60,
-    borderRadius: BORDER_RADIUS.md,
-    justifyContent: 'center',
-    alignItems: 'center',
+  tripImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
   },
-  tripInfo: {
+  tripGradient: {
     flex: 1,
-    marginLeft: SPACING.md,
+    justifyContent: 'flex-end',
+  },
+  tripCardContent: {
+    padding: SPACING.md,
   },
   tripLocation: {
-    fontSize: FONT_SIZES.md,
-    fontWeight: FONT_WEIGHTS.semibold,
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.lg,
+    fontWeight: FONT_WEIGHTS.bold,
     marginBottom: SPACING.xs,
   },
-  tripMeta: {
+  tripCardMeta: {
     flexDirection: 'row',
     gap: SPACING.md,
   },
-  metaItem: {
+  tripMetaItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  metaText: {
+  tripMetaText: {
+    color: '#FFFFFF',
     fontSize: FONT_SIZES.xs,
   },
-  likesContainer: {
+  tripLikes: {
+    position: 'absolute',
+    top: SPACING.md,
+    right: SPACING.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 4,
+    borderRadius: BORDER_RADIUS.sm,
   },
-  likesCount: {
-    fontSize: FONT_SIZES.sm,
+  tripLikesText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.xs,
     fontWeight: FONT_WEIGHTS.semibold,
   },
+  // Empty State
   emptyState: {
     alignItems: 'center',
     paddingVertical: SPACING.xxxl,
