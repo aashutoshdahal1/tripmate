@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   FlatList,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,66 +16,84 @@ import { BORDER_RADIUS, SPACING, FONT_SIZES, FONT_WEIGHTS } from '../constants/c
 const NotificationsScreen = () => {
   const navigation = useNavigation();
   const { colors, shadows } = useTheme();
+  const [activeTab, setActiveTab] = useState('all');
+
+  const tabs = [
+    { id: 'all', label: 'All' },
+    { id: 'likes', label: 'Likes' },
+    { id: 'comments', label: 'Comments' },
+  ];
 
   const notifications = [
     {
       id: 1,
       type: 'like',
       icon: 'heart',
-      iconColor: '#FF4757',
-      title: 'New Like',
-      message: 'John liked your trip to Pokhara',
-      time: '2 min ago',
+      iconBg: '#FFE8E8',
+      iconColor: '#FF3B30',
+      avatar: 'https://i.pravatar.cc/150?img=10',
+      title: 'John Miller',
+      message: 'liked your trip to Pokhara',
+      time: '2m ago',
       read: false,
     },
     {
       id: 2,
       type: 'comment',
       icon: 'chatbubble',
+      iconBg: '#E8F5FF',
       iconColor: colors.primary,
-      title: 'New Comment',
-      message: 'Emma commented on your Kathmandu trip',
-      time: '15 min ago',
+      avatar: 'https://i.pravatar.cc/150?img=2',
+      title: 'Emma Wilson',
+      message: 'commented: "Amazing photos! How was the paragliding?"',
+      time: '15m ago',
       read: false,
     },
     {
       id: 3,
-      type: 'ai',
-      icon: 'sparkles',
-      iconColor: colors.accent,
-      title: 'AI Suggestion',
-      message: 'Check out these trending destinations based on your interests',
-      time: '1 hour ago',
+      type: 'follow',
+      icon: 'person-add',
+      iconBg: '#E8FFE8',
+      iconColor: '#00C896',
+      avatar: 'https://i.pravatar.cc/150?img=3',
+      title: 'David Chen',
+      message: 'started following you',
+      time: '1h ago',
       read: false,
     },
     {
       id: 4,
-      type: 'follow',
-      icon: 'person-add',
-      iconColor: colors.primary,
-      title: 'New Follower',
-      message: 'David started following you',
-      time: '3 hours ago',
+      type: 'ai',
+      icon: 'sparkles',
+      iconBg: '#FFF3E8',
+      iconColor: '#FF9500',
+      title: 'AI Suggestion',
+      message: 'Check out trending destinations based on your interests',
+      time: '3h ago',
       read: true,
     },
     {
       id: 5,
       type: 'bookmark',
       icon: 'bookmark',
-      iconColor: colors.accent,
-      title: 'Trip Saved',
-      message: 'Someone saved your Chitwan trip',
-      time: '5 hours ago',
+      iconBg: '#F8E8FF',
+      iconColor: '#9747FF',
+      avatar: 'https://i.pravatar.cc/150?img=4',
+      title: 'Sarah Lopez',
+      message: 'saved your Chitwan trip',
+      time: '5h ago',
       read: true,
     },
     {
       id: 6,
-      type: 'ai',
-      icon: 'sparkles',
-      iconColor: colors.accent,
-      title: 'Budget Alert',
-      message: 'Great deals to Pokhara this weekend!',
-      time: '1 day ago',
+      type: 'like',
+      icon: 'heart',
+      iconBg: '#FFE8E8',
+      iconColor: '#FF3B30',
+      avatar: 'https://i.pravatar.cc/150?img=5',
+      title: 'Mike Johnson',
+      message: 'liked your Kathmandu trip',
+      time: '1d ago',
       read: true,
     },
   ];
@@ -84,32 +103,38 @@ const NotificationsScreen = () => {
       style={[
         styles.notificationCard,
         {
-          backgroundColor: item.read ? colors.card : colors.primaryAlpha,
+          backgroundColor: item.read ? colors.card : colors.backgroundAlt,
         },
-        shadows.sm,
       ]}
+      activeOpacity={0.7}
     >
-      <View style={[styles.iconContainer, { backgroundColor: `${item.iconColor}20` }]}>
-        <Ionicons name={item.icon} size={24} color={item.iconColor} />
+      {/* Avatar or Icon */}
+      <View style={styles.avatarContainer}>
+        {item.avatar ? (
+          <Image source={{ uri: item.avatar }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.iconCircle, { backgroundColor: item.iconBg }]}>
+            <Ionicons name={item.icon} size={20} color={item.iconColor} />
+          </View>
+        )}
+        {!item.read && <View style={[styles.badge, { backgroundColor: colors.primary }]} />}
       </View>
 
+      {/* Content */}
       <View style={styles.notificationContent}>
-        <View style={styles.notificationHeader}>
-          <Text style={[styles.notificationTitle, { color: colors.text }]}>
-            {item.title}
-          </Text>
-          {!item.read && <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />}
-        </View>
-        <Text style={[styles.notificationMessage, { color: colors.textSecondary }]} numberOfLines={2}>
-          {item.message}
+        <Text style={[styles.notificationText, { color: colors.text }]}>
+          <Text style={{ fontWeight: FONT_WEIGHTS.semibold }}>{item.title}</Text>
+          {' '}
+          <Text style={{ color: colors.textSecondary }}>{item.message}</Text>
         </Text>
-        <Text style={[styles.notificationTime, { color: colors.textLight }]}>
+        <Text style={[styles.notificationTime, { color: colors.textSecondary }]}>
           {item.time}
         </Text>
       </View>
 
-      <TouchableOpacity style={styles.dismissButton}>
-        <Ionicons name="close" size={20} color={colors.textLight} />
+      {/* Action Icon */}
+      <TouchableOpacity style={styles.actionButton}>
+        <Ionicons name="ellipsis-horizontal" size={20} color={colors.textSecondary} />
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -117,21 +142,46 @@ const NotificationsScreen = () => {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.card }]}>
-        <View>
+      <View style={[styles.header, { backgroundColor: colors.card }, shadows.sm]}>
+        <View style={styles.headerContent}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
           {unreadCount > 0 && (
-            <Text style={[styles.unreadCount, { color: colors.primary }]}>
-              {unreadCount} unread
-            </Text>
+            <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
+              <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
+            </View>
           )}
         </View>
-
         <TouchableOpacity style={styles.markAllButton}>
-          <Text style={[styles.markAllText, { color: colors.primary }]}>Mark all read</Text>
+          <Ionicons name="checkmark-done" size={22} color={colors.primary} />
         </TouchableOpacity>
+      </View>
+
+      {/* Tabs */}
+      <View style={[styles.tabs, { backgroundColor: colors.card }]}>
+        {tabs.map((tab) => (
+          <TouchableOpacity
+            key={tab.id}
+            style={[
+              styles.tab,
+              activeTab === tab.id && { borderBottomColor: colors.primary },
+            ]}
+            onPress={() => setActiveTab(tab.id)}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                {
+                  color: activeTab === tab.id ? colors.primary : colors.textSecondary,
+                  fontWeight: activeTab === tab.id ? FONT_WEIGHTS.semibold : FONT_WEIGHTS.regular,
+                },
+              ]}
+            >
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* Notifications List */}
@@ -145,14 +195,16 @@ const NotificationsScreen = () => {
         />
       ) : (
         <View style={styles.emptyState}>
-          <Ionicons name="notifications-off-outline" size={80} color={colors.textLight} />
+          <View style={[styles.emptyIcon, { backgroundColor: colors.backgroundAlt }]}>
+            <Ionicons name="notifications-off-outline" size={48} color={colors.textSecondary} />
+          </View>
           <Text style={[styles.emptyTitle, { color: colors.text }]}>No Notifications</Text>
           <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
             You're all caught up!
           </Text>
         </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -164,24 +216,47 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingTop: 50,
     paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+    paddingBottom: SPACING.md,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
   },
   headerTitle: {
     fontSize: FONT_SIZES.xxl,
     fontWeight: FONT_WEIGHTS.bold,
-    marginBottom: SPACING.xs,
   },
-  unreadCount: {
-    fontSize: FONT_SIZES.sm,
-    fontWeight: FONT_WEIGHTS.medium,
+  unreadBadge: {
+    minWidth: 24,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xs,
+  },
+  unreadBadgeText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.xs,
+    fontWeight: FONT_WEIGHTS.bold,
   },
   markAllButton: {
-    padding: SPACING.sm,
+    padding: SPACING.xs,
   },
-  markAllText: {
+  tabs: {
+    flexDirection: 'row',
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabText: {
     fontSize: FONT_SIZES.sm,
-    fontWeight: FONT_WEIGHTS.semibold,
   },
   listContent: {
     padding: SPACING.lg,
@@ -191,55 +266,66 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.lg,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
-  iconContainer: {
+  avatarContainer: {
+    position: 'relative',
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  iconCircle: {
     width: 48,
     height: 48,
     borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  badge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
   notificationContent: {
     flex: 1,
     marginLeft: SPACING.md,
+    marginRight: SPACING.sm,
   },
-  notificationHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.xs,
-  },
-  notificationTitle: {
-    fontSize: FONT_SIZES.md,
-    fontWeight: FONT_WEIGHTS.semibold,
-    marginRight: SPACING.xs,
-  },
-  unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  notificationMessage: {
+  notificationText: {
     fontSize: FONT_SIZES.sm,
+    lineHeight: 20,
     marginBottom: SPACING.xs,
-    lineHeight: 18,
   },
   notificationTime: {
     fontSize: FONT_SIZES.xs,
   },
-  dismissButton: {
+  actionButton: {
     padding: SPACING.xs,
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: SPACING.xxxl,
+    paddingHorizontal: SPACING.xxxl,
+  },
+  emptyIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
   },
   emptyTitle: {
-    fontSize: FONT_SIZES.xxl,
+    fontSize: FONT_SIZES.xl,
     fontWeight: FONT_WEIGHTS.bold,
-    marginTop: SPACING.lg,
     marginBottom: SPACING.xs,
   },
   emptySubtitle: {
