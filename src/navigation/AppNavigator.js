@@ -1,4 +1,5 @@
 import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -22,6 +23,9 @@ const Tab = createBottomTabNavigator();
 
 const MainTabs = () => {
   const { colors } = useTheme();
+  
+  // Mock unread notifications count - replace with actual state/context
+  const unreadNotifications = 3;
 
   return (
     <Tab.Navigator
@@ -38,6 +42,20 @@ const MainTabs = () => {
             iconName = focused ? 'add-circle' : 'add-circle-outline';
           } else if (route.name === 'NotificationsTab') {
             iconName = focused ? 'notifications' : 'notifications-outline';
+            
+            // Return icon with badge for notifications
+            return (
+              <View style={styles.iconContainer}>
+                <Ionicons name={iconName} size={size} color={color} />
+                {unreadNotifications > 0 && (
+                  <View style={[styles.badge, { backgroundColor: '#FF3B30' }]}>
+                    <Text style={styles.badgeText}>
+                      {unreadNotifications > 9 ? '9+' : unreadNotifications}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            );
           } else if (route.name === 'ProfileTab') {
             iconName = focused ? 'person' : 'person-outline';
           }
@@ -122,5 +140,32 @@ const AppNavigator = () => {
     </NavigationContainer>
   );
 };
+
+const styles = StyleSheet.create({
+  iconContainer: {
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+});
 
 export default AppNavigator;
