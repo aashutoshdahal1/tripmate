@@ -7,6 +7,8 @@ import { useTheme } from '../contexts/ThemeContext';
 
 // Screens
 import GetStartedScreen from '../screens/GetStartedScreen';
+import LoginScreen from '../screens/LoginScreen';
+import SignupScreen from '../screens/SignupScreen';
 import HomeScreen from '../screens/HomeScreen';
 import ExploreScreen from '../screens/ExploreScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
@@ -99,6 +101,8 @@ const AppNavigator = () => {
         }}
       >
         <Stack.Screen name="GetStarted" component={GetStartedScreen} />
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="Signup" component={SignupScreen} />
         <Stack.Screen name="Main" component={MainTabs} />
         <Stack.Screen
           name="PostDetails"

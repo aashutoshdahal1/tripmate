@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   Image,
   TouchableOpacity,
   Dimensions,
+  Animated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,109 +18,136 @@ const { width, height } = Dimensions.get('window');
 
 const GetStartedScreen = () => {
   const navigation = useNavigation();
-  const { colors, gradients } = useTheme();
+  const { colors } = useTheme();
+  
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
 
-  const handleGetStarted = () => {
-    navigation.navigate('Main');
-  };
-
-  const handleSocialLogin = (provider) => {
-    // Handle social login
-    console.log(`Login with ${provider}`);
-    navigation.navigate('Main');
-  };
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 20,
+        friction: 7,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Hero Section */}
-      <View style={styles.heroSection}>
-        <View style={styles.imageContainer}>
-          <Ionicons name="airplane" size={80} color={colors.primary} />
-        </View>
-        
-        <Text style={[styles.title, { color: colors.text }]}>
-          Welcome to TripMate
-        </Text>
-        
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Discover, plan, and share your travel adventures
-        </Text>
-      </View>
-
-      {/* Features */}
-      <View style={styles.features}>
-        {[
-          { icon: 'videocam', text: 'Watch travel videos' },
-          { icon: 'map', text: 'Detailed itineraries' },
-          { icon: 'cash', text: 'Budget breakdown' },
-          { icon: 'sparkles', text: 'AI trip planner' },
-        ].map((feature, idx) => (
-          <View key={idx} style={styles.featureItem}>
-            <View style={[styles.featureIcon, { backgroundColor: colors.primaryAlpha }]}>
-              <Ionicons name={feature.icon} size={24} color={colors.primary} />
-            </View>
-            <Text style={[styles.featureText, { color: colors.textSecondary }]}>
-              {feature.text}
-            </Text>
-          </View>
-        ))}
-      </View>
-
-      {/* CTA Section */}
-      <View style={styles.ctaSection}>
-        {/* Primary Button */}
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={handleGetStarted}
-          activeOpacity={0.9}
+      <LinearGradient
+        colors={[colors.background, colors.backgroundAlt || colors.background]}
+        style={styles.gradientBackground}
+      >
+        {/* Hero Image Section */}
+        <Animated.View
+          style={[
+            styles.heroSection,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
         >
-          <LinearGradient
-            colors={[colors.primary, colors.primary]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.gradientButton}
-          >
-            <Text style={styles.primaryButtonText}>Get Started</Text>
-            <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
-          </LinearGradient>
-        </TouchableOpacity>
+          <View style={styles.imageContainer}>
+            <Image
+              source={{ uri: 'https://images.pexels.com/photos/1450353/pexels-photo-1450353.jpeg' }}
+              style={styles.heroImage}
+            />
+            <LinearGradient
+              colors={['transparent', 'rgba(0,0,0,0.6)']}
+              style={styles.imageGradient}
+            />
+          </View>
+        </Animated.View>
 
-        {/* Social Login Options */}
-        <View style={styles.divider}>
-          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-          <Text style={[styles.dividerText, { color: colors.textLight }]}>
-            or continue with
+        {/* Content Section */}
+        <Animated.View
+          style={[
+            styles.contentSection,
+            {
+              opacity: fadeAnim,
+            },
+          ]}
+        >
+          {/* App Icon */}
+          <View style={[styles.appIcon, { backgroundColor: colors.primary }]}>
+            <Ionicons name="airplane" size={32} color="#FFFFFF" />
+          </View>
+
+          {/* Title */}
+          <Text style={[styles.title, { color: colors.text }]}>TripMate</Text>
+          <Text style={[styles.tagline, { color: colors.textSecondary }]}>
+            Your Travel Companion
           </Text>
-          <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-        </View>
 
-        <View style={styles.socialButtons}>
-          <TouchableOpacity
-            style={[styles.socialButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => handleSocialLogin('Google')}
-          >
-            <Ionicons name="logo-google" size={24} color="#DB4437" />
-          </TouchableOpacity>
+          {/* Features */}
+          <View style={styles.features}>
+            {[
+              { icon: 'videocam', text: 'Travel Videos', color: '#FF3B30' },
+              { icon: 'map', text: 'Trip Plans', color: '#00C896' },
+              { icon: 'sparkles', text: 'AI Assistant', color: '#FF9500' },
+            ].map((feature, idx) => (
+              <View key={idx} style={[styles.featureChip, { backgroundColor: colors.card }]}>
+                <Ionicons name={feature.icon} size={18} color={feature.color} />
+                <Text style={[styles.featureText, { color: colors.text }]}>{feature.text}</Text>
+              </View>
+            ))}
+          </View>
 
-          <TouchableOpacity
-            style={[styles.socialButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => handleSocialLogin('Apple')}
-          >
-            <Ionicons name="logo-apple" size={24} color={colors.text} />
-          </TouchableOpacity>
+          {/* CTA Buttons */}
+          <View style={styles.ctaSection}>
+            {/* Sign Up Button */}
+            <TouchableOpacity
+              style={styles.signupButton}
+              onPress={() => navigation.navigate('Signup')}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={[colors.primary, colors.primary]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.gradientButton}
+              >
+                <Text style={styles.signupButtonText}>Create Account</Text>
+                <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+              </LinearGradient>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.socialButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => handleSocialLogin('Email')}
-          >
-            <Ionicons name="mail" size={24} color={colors.primary} />
-          </TouchableOpacity>
-        </View>
+            {/* Login Button */}
+            <TouchableOpacity
+              style={[styles.loginButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => navigation.navigate('Login')}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.loginButtonText, { color: colors.text }]}>Sign In</Text>
+            </TouchableOpacity>
 
-        <Text style={[styles.termsText, { color: colors.textLight }]}>
-          By continuing, you agree to our Terms & Privacy Policy
-        </Text>
-      </View>
+            {/* Skip Button */}
+            <TouchableOpacity
+              style={styles.skipButton}
+              onPress={() => navigation.navigate('Main')}
+            >
+              <Text style={[styles.skipText, { color: colors.textSecondary }]}>
+                Skip for now
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Terms */}
+          <Text style={[styles.termsText, { color: colors.textLight }]}>
+            By continuing, you agree to our{' '}
+            <Text style={{ color: colors.primary }}>Terms</Text> &{' '}
+            <Text style={{ color: colors.primary }}>Privacy Policy</Text>
+          </Text>
+        </Animated.View>
+      </LinearGradient>
     </View>
   );
 };
@@ -128,63 +156,80 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  heroSection: {
+  gradientBackground: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.xl,
+  },
+  heroSection: {
+    height: height * 0.4,
   },
   imageContainer: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+    width: width,
+    height: '100%',
+    position: 'relative',
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  imageGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '50%',
+  },
+  contentSection: {
+    flex: 1,
+    paddingHorizontal: SPACING.xl,
+    paddingTop: SPACING.xl,
+  },
+  appIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: BORDER_RADIUS.xl,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: SPACING.xxxl,
+    alignSelf: 'center',
+    marginBottom: SPACING.lg,
   },
   title: {
-    fontSize: FONT_SIZES.xxxl,
+    fontSize: FONT_SIZES.xxxl + 4,
     fontWeight: FONT_WEIGHTS.bold,
     textAlign: 'center',
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.xs,
   },
-  subtitle: {
-    fontSize: FONT_SIZES.lg,
+  tagline: {
+    fontSize: FONT_SIZES.md,
     textAlign: 'center',
-    lineHeight: 24,
+    marginBottom: SPACING.xl,
   },
   features: {
     flexDirection: 'row',
+    justifyContent: 'center',
     flexWrap: 'wrap',
-    justifyContent: 'space-around',
-    paddingHorizontal: SPACING.xl,
+    gap: SPACING.sm,
     marginBottom: SPACING.xxxl,
   },
-  featureItem: {
+  featureChip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    width: width / 2 - SPACING.xxxl,
-    marginBottom: SPACING.lg,
-  },
-  featureIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.xl,
+    gap: SPACING.xs,
   },
   featureText: {
     fontSize: FONT_SIZES.sm,
-    textAlign: 'center',
+    fontWeight: FONT_WEIGHTS.medium,
   },
   ctaSection: {
-    paddingHorizontal: SPACING.xl,
-    paddingBottom: SPACING.xxxl,
+    marginBottom: SPACING.lg,
   },
-  primaryButton: {
+  signupButton: {
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
-    marginBottom: SPACING.xl,
+    marginBottom: SPACING.md,
   },
   gradientButton: {
     flexDirection: 'row',
@@ -193,37 +238,30 @@ const styles = StyleSheet.create({
     gap: SPACING.sm,
     paddingVertical: SPACING.lg,
   },
-  primaryButtonText: {
+  signupButtonText: {
     color: '#FFFFFF',
     fontSize: FONT_SIZES.lg,
     fontWeight: FONT_WEIGHTS.semibold,
   },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: SPACING.xl,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    marginHorizontal: SPACING.md,
-    fontSize: FONT_SIZES.sm,
-  },
-  socialButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: SPACING.lg,
-    marginBottom: SPACING.xl,
-  },
-  socialButton: {
-    width: 64,
-    height: 64,
+  loginButton: {
     borderRadius: BORDER_RADIUS.lg,
-    justifyContent: 'center',
+    paddingVertical: SPACING.lg,
     alignItems: 'center',
     borderWidth: 1,
+    marginBottom: SPACING.md,
+  },
+  loginButtonText: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  skipButton: {
+    paddingVertical: SPACING.md,
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
+  },
+  skipText: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.medium,
   },
   termsText: {
     fontSize: FONT_SIZES.xs,
