@@ -86,7 +86,10 @@ Return ONLY a valid JSON object with this exact structure, no additional text:
 Generate the itinerary now:`;
 
     // Get Gemini model
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    // Using gemini-2.5-flash (latest available model with quota)
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-2.5-flash'
+    });
 
     // Generate content
     const result = await model.generateContent(prompt);
