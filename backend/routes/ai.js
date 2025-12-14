@@ -39,51 +39,59 @@ router.post('/generate-itinerary', async (req, res) => {
     console.log('🎯 Interests:', interests);
     console.log('💰 Budget:', budget);
 
+    // Determine if international travel
+    const isInternational = distance > 2000;
+    
     // Create detailed prompt for Gemini
-    const prompt = `You are an expert travel planner. Generate a detailed, personalized travel itinerary based on the following information:
+    const prompt = `You are an expert travel planner. Generate a SHORT, REALISTIC travel itinerary based on the following:
 
 **Trip Details:**
-- Starting Location: Latitude ${userLocation.latitude}, Longitude ${userLocation.longitude}
-- Destination: ${destinationName}${destinationAddress ? ` (${destinationAddress})` : ''}
-- Destination Coordinates: Latitude ${destinationLocation.latitude}, Longitude ${destinationLocation.longitude}
-- Total Distance: ${distance.toFixed(0)} km
-- Trip Duration: ${duration || 'Calculate optimal duration'} days
-- Budget: ${budget ? `NPR ${budget}` : 'Moderate budget'}
-- Interests: ${interests && interests.length > 0 ? interests.join(', ') : 'General exploration'}
+- From: Latitude ${userLocation.latitude}, Longitude ${userLocation.longitude}
+- To: ${destinationName}${destinationAddress ? ` (${destinationAddress})` : ''}
+- Distance: ${distance.toFixed(0)} km ${isInternational ? '(INTERNATIONAL TRIP)' : '(DOMESTIC/REGIONAL TRIP)'}
+- Duration: ${duration || 'Calculate optimal (3-7 days recommended)'} days
+- Budget Constraint: ${budget ? `NPR ${budget}` : 'Moderate'}
+- Interests: ${interests && interests.length > 0 ? interests.join(', ') : 'General tourism'}
 - Trip Type: ${tripType || 'leisure'}
 
-**Requirements:**
-1. Create a day-by-day itinerary with the following structure for each day:
-   - Day number
-   - Day title (creative, with emoji)
-   - Detailed activities (bullet points, specific timings, realistic activities)
-   - Estimated budget for the day in NPR
+**CRITICAL BUDGET RULES:**
+${isInternational ? `
+- International flights: NPR 80,000 - 150,000 return
+- International hotels: NPR 8,000 - 15,000 per night
+- Daily expenses abroad: NPR 5,000 - 12,000 per day
+- Minimum realistic budget: NPR 200,000+ for ${distance.toFixed(0)}km
+` : `
+- Domestic/regional transport: NPR 2,000 - 20,000
+- Accommodation: NPR 1,500 - 5,000 per night
+- Daily expenses: NPR 1,000 - 3,000 per day
+- Minimum realistic budget: NPR 15,000+
+`}
 
-2. First day should include realistic travel from starting location to destination (${distance > 500 ? 'by flight' : 'by road'})
-3. Middle days should include activities based on interests: ${interests && interests.length > 0 ? interests.join(', ') : 'cultural exploration, local food, sightseeing'}
-4. Last day should include return journey
-5. Include specific local attractions, restaurants, and activities in ${destinationName}
-6. Provide realistic time estimates for travel and activities
-7. Budget should be realistic for Nepal (NPR currency)
-8. Make it personal and engaging with practical tips
+**Requirements:**
+1. Keep it SHORT - 3-5 activities per day maximum
+2. Be REALISTIC about costs - DO NOT underestimate international travel
+3. First day: Include realistic travel (${distance > 500 ? 'flight + transfer' : 'road journey'})
+4. Middle days: ${interests && interests.length > 0 ? interests.join(', ') : 'sightseeing'} activities
+5. Last day: Return journey
+6. Use concise bullet points (1 line each)
+7. Calculate ACCURATE budgets in NPR
 
 **Output Format (STRICT JSON):**
-Return ONLY a valid JSON object with this exact structure, no additional text:
 {
-  "duration": <number of days>,
-  "totalBudget": <total budget in NPR>,
+  "duration": <number of days (3-7)>,
+  "totalBudget": <REALISTIC total in NPR>,
   "itinerary": [
     {
       "day": 1,
-      "title": "Day title with emoji",
-      "activities": "• Activity 1\\n• Activity 2\\n• Activity 3...",
-      "budget": <day budget in NPR>
+      "title": "Brief title with emoji",
+      "activities": "• Activity 1\\n• Activity 2\\n• Activity 3",
+      "budget": <realistic daily budget in NPR>
     }
   ],
-  "tips": ["Tip 1", "Tip 2", "Tip 3"]
+  "tips": ["Short tip 1", "Short tip 2", "Short tip 3"]
 }
 
-Generate the itinerary now:`;
+Generate REALISTIC, CONCISE itinerary now:`;
 
     // Get Gemini model
     // Using gemini-2.5-flash (latest available model with quota)

@@ -11,15 +11,21 @@ import {
   ActivityIndicator,
   RefreshControl,
   Pressable,
+  Alert,
+  Modal,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserPosts } from '../services/postService';
+import { getUserPosts, deletePost } from '../services/postService';
 import { BORDER_RADIUS, SPACING, FONT_SIZES, FONT_WEIGHTS } from '../constants/colors';
+import DeletePostModal from '../components/DeletePostModal';
+import Toast from '../components/Toast';
 
 const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 3;
@@ -36,6 +42,11 @@ const ProfileScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
+  const [selectedPost, setSelectedPost] = useState(null);
+  const [showActionMenu, setShowActionMenu] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'success' });
 
   // Fetch user posts
   const fetchUserPosts = async (pageNum = 1, isRefresh = false) => {
@@ -104,6 +115,51 @@ const ProfileScreen = () => {
     fetchUserPosts(1, true);
   };
 
+  // Handle delete post
+  const handleDeletePost = async () => {
+    if (!selectedPost || !token) return;
+
+    try {
+      setDeleting(true);
+      console.log('🗑️ Deleting post:', selectedPost._id);
+      
+      await deletePost(selectedPost._id, token);
+      
+      // Remove post from local state
+      setUserPosts(prev => prev.filter(post => post._id !== selectedPost._id));
+      
+      // Close modals
+      setShowDeleteModal(false);
+      setShowActionMenu(false);
+      setSelectedPost(null);
+      
+      // Show success toast
+      setToast({
+        visible: true,
+        message: '✅ Trip deleted successfully',
+        type: 'success',
+      });
+      
+      console.log('✅ Post deleted successfully');
+    } catch (error) {
+      console.error('❌ Delete post error:', error);
+      setToast({
+        visible: true,
+        message: error.message || 'Failed to delete trip',
+        type: 'error',
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Handle long press on grid item
+  const handleLongPress = (item) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setSelectedPost(item);
+    setShowActionMenu(true);
+  };
+
   // Static data for tabs
   const tabs = [
     { id: 'trips', label: 'My Trips', icon: 'map' },
@@ -122,6 +178,8 @@ const ProfileScreen = () => {
         key={item._id}
         style={styles.gridItem}
         onPress={() => navigation.navigate('PostDetails', { postId: item._id })}
+        onLongPress={() => handleLongPress(item)}
+        delayLongPress={500}
       >
         {/* Media Thumbnail */}
         <Image 
@@ -419,9 +477,19 @@ const ProfileScreen = () => {
                   </Text>
                 </View>
               ) : userPosts.length > 0 ? (
-                <View style={styles.gridContainer}>
-                  {userPosts.map((item, index) => renderGridItem({ item, index }))}
-                </View>
+                <>
+                  {/* Helper Text */}
+                  <View style={[styles.helperTextContainer, { backgroundColor: colors.primaryAlpha }]}>
+                    <Ionicons name="information-circle" size={16} color={colors.primary} />
+                    <Text style={[styles.helperText, { color: colors.primary }]}>
+                      Long press on any trip to view more options
+                    </Text>
+                  </View>
+                  
+                  <View style={styles.gridContainer}>
+                    {userPosts.map((item, index) => renderGridItem({ item, index }))}
+                  </View>
+                </>
               ) : (
                 <View style={styles.emptyState}>
                   <View style={[styles.emptyIcon, { backgroundColor: colors.primaryAlpha }]}>
@@ -464,6 +532,146 @@ const ProfileScreen = () => {
           )}
         </View>
       </ScrollView>
+
+      {/* Action Menu Modal */}
+      <Modal
+        visible={showActionMenu}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowActionMenu(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowActionMenu(false)}>
+          <View style={styles.actionMenuOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={[styles.actionMenuContent, { backgroundColor: colors.card }]}>
+                {/* Selected Post Preview */}
+                {selectedPost && (
+                  <View style={styles.actionMenuHeader}>
+                    <Image 
+                      source={{ 
+                        uri: selectedPost.media?.type === 'video' && selectedPost.media?.thumbnail 
+                          ? selectedPost.media.thumbnail 
+                          : selectedPost.media?.url 
+                      }} 
+                      style={styles.actionMenuThumbnail}
+                    />
+                    <View style={styles.actionMenuInfo}>
+                      <Text style={[styles.actionMenuTitle, { color: colors.text }]} numberOfLines={1}>
+                        {selectedPost.title}
+                      </Text>
+                      <Text style={[styles.actionMenuLocation, { color: colors.textSecondary }]} numberOfLines={1}>
+                        {selectedPost.location?.name}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Action Buttons */}
+                <View style={styles.actionMenuButtons}>
+                  <TouchableOpacity
+                    style={[styles.actionMenuItem, { backgroundColor: colors.background }]}
+                    onPress={() => {
+                      setShowActionMenu(false);
+                      navigation.navigate('PostDetails', { postId: selectedPost._id });
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.actionMenuIcon, { backgroundColor: colors.primaryAlpha }]}>
+                      <Ionicons name="eye" size={20} color={colors.primary} />
+                    </View>
+                    <Text style={[styles.actionMenuText, { color: colors.text }]}>
+                      View Trip
+                    </Text>
+                    <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.actionMenuItem, { backgroundColor: colors.background }]}
+                    onPress={() => {
+                      setShowActionMenu(false);
+                      // TODO: Add edit functionality
+                      Alert.alert('Coming Soon', 'Edit functionality will be available soon!');
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.actionMenuIcon, { backgroundColor: '#FF950020' }]}>
+                      <Ionicons name="create" size={20} color="#FF9500" />
+                    </View>
+                    <Text style={[styles.actionMenuText, { color: colors.text }]}>
+                      Edit Trip
+                    </Text>
+                    <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.actionMenuItem, { backgroundColor: colors.background }]}
+                    onPress={() => {
+                      setShowActionMenu(false);
+                      // TODO: Add share functionality
+                      Alert.alert('Coming Soon', 'Share functionality will be available soon!');
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.actionMenuIcon, { backgroundColor: '#00C89620' }]}>
+                      <Ionicons name="share-social" size={20} color="#00C896" />
+                    </View>
+                    <Text style={[styles.actionMenuText, { color: colors.text }]}>
+                      Share Trip
+                    </Text>
+                    <Ionicons name="chevron-forward" size={20} color={colors.textLight} />
+                  </TouchableOpacity>
+
+                  <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+                  <TouchableOpacity
+                    style={[styles.actionMenuItem, { backgroundColor: '#FF3B3010' }]}
+                    onPress={() => {
+                      setShowActionMenu(false);
+                      setTimeout(() => setShowDeleteModal(true), 300);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.actionMenuIcon, { backgroundColor: '#FF3B3020' }]}>
+                      <Ionicons name="trash" size={20} color="#FF3B30" />
+                    </View>
+                    <Text style={[styles.actionMenuText, { color: '#FF3B30' }]}>
+                      Delete Trip
+                    </Text>
+                    <Ionicons name="chevron-forward" size={20} color="#FF3B30" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Cancel Button */}
+                <TouchableOpacity
+                  style={[styles.cancelMenuItem, { backgroundColor: colors.background }]}
+                  onPress={() => setShowActionMenu(false)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.cancelMenuText, { color: colors.text }]}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <DeletePostModal
+        visible={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        onConfirm={handleDeletePost}
+        loading={deleting}
+      />
+
+      {/* Toast Notification */}
+      <Toast
+        visible={toast.visible}
+        message={toast.message}
+        type={toast.type}
+        onHide={() => setToast({ ...toast, visible: false })}
+      />
     </View>
   );
 };
@@ -702,6 +910,23 @@ const styles = StyleSheet.create({
   content: {
     paddingTop: SPACING.xs,
   },
+  // Helper Text
+  helperTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    marginHorizontal: SPACING.md,
+    marginTop: SPACING.sm,
+    marginBottom: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  helperText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: FONT_WEIGHTS.medium,
+    flex: 1,
+  },
   // TikTok-Style Grid
   gridContainer: {
     flexDirection: 'row',
@@ -886,6 +1111,86 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     color: '#FFFFFF',
     fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  // Action Menu Modal
+  actionMenuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  actionMenuContent: {
+    borderTopLeftRadius: BORDER_RADIUS.xxl,
+    borderTopRightRadius: BORDER_RADIUS.xxl,
+    paddingTop: SPACING.lg,
+    paddingBottom: SPACING.xxxl,
+    paddingHorizontal: SPACING.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  actionMenuHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    paddingBottom: SPACING.lg,
+    marginBottom: SPACING.md,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  actionMenuThumbnail: {
+    width: 60,
+    height: 80,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  actionMenuInfo: {
+    flex: 1,
+  },
+  actionMenuTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.semibold,
+    marginBottom: 4,
+  },
+  actionMenuLocation: {
+    fontSize: FONT_SIZES.sm,
+  },
+  actionMenuButtons: {
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+  },
+  actionMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+  },
+  actionMenuIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: BORDER_RADIUS.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionMenuText: {
+    flex: 1,
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.medium,
+  },
+  divider: {
+    height: 1,
+    marginVertical: SPACING.sm,
+  },
+  cancelMenuItem: {
+    paddingVertical: SPACING.lg,
+    borderRadius: BORDER_RADIUS.lg,
+    alignItems: 'center',
+  },
+  cancelMenuText: {
+    fontSize: FONT_SIZES.lg,
     fontWeight: FONT_WEIGHTS.semibold,
   },
 });

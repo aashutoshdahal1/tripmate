@@ -19,11 +19,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { Video } from 'expo-av';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { BORDER_RADIUS, SPACING, FONT_SIZES, FONT_WEIGHTS } from '../constants/colors';
 import { pickMedia, uploadMediaToCloudinary, createPost } from '../services/postService';
 import LocationMap3D from '../components/LocationMap3D';
+import WaterWaveLoader from '../components/WaterWaveLoader';
 
 const { width } = Dimensions.get('window');
 
@@ -62,11 +64,13 @@ const CreatePostScreen = () => {
 
   const [uploadingVlog, setUploadingVlog] = useState(false);
   const [vlogProgress, setVlogProgress] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState('Publishing...');
 
   const videoRef = useRef(null);
   const scrollRef = useRef(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const loadingMessageInterval = useRef(null);
 
   const interestOptions = [
     { id: 'adventure', label: 'Adventure', icon: 'flame', color: '#FF6B6B' },
@@ -174,6 +178,91 @@ const CreatePostScreen = () => {
 
   // Handle vlog selection and upload
   const handleAddVlog = async () => {
+    // Show options: Record or Select from library
+    Alert.alert(
+      'Add Vlog',
+      'Choose how to add your video',
+      [
+        {
+          text: 'Record New Video',
+          onPress: () => handleRecordVlog(),
+        },
+        {
+          text: 'Select from Library',
+          onPress: () => handleSelectVlog(),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  // Record video with camera (automatically compressed)
+  const handleRecordVlog = async () => {
+    try {
+      setUploadingVlog(true);
+      
+      // Request camera permission
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Camera access is required to record videos');
+        return;
+      }
+
+      // Launch camera to record video
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['videos'],
+        videoMaxDuration: 60, // 60 seconds max
+        quality: 0.5, // 50% quality for smaller files
+        videoQuality: ImagePicker.UIImagePickerControllerQualityType.Low,
+        videoExportPreset: ImagePicker.VideoExportPreset.LowQuality, // Aggressive compression
+      });
+
+      if (!result.canceled) {
+        const asset = result.assets[0];
+        console.log('🎥 VIDEO RECORDED:', {
+          uri: asset.uri,
+          duration: asset.duration,
+          fileSize: asset.fileSize,
+        });
+
+        // Upload to Cloudinary
+        const cloudinaryResult = await uploadMediaToCloudinary(
+          asset.uri,
+          'video',
+          (progress) => setVlogProgress(progress)
+        );
+
+        // Add to vlogs array
+        const newVlog = {
+          uri: cloudinaryResult.url,
+          thumbnail: cloudinaryResult.thumbnail,
+          duration: cloudinaryResult.duration,
+          publicId: cloudinaryResult.publicId,
+          title: '',
+        };
+
+        setFormData(prev => ({
+          ...prev,
+          vlogs: [...prev.vlogs, newVlog],
+        }));
+
+        Alert.alert('Success', 'Vlog added successfully!');
+      }
+    } catch (error) {
+      console.error('❌ VIDEO RECORDING ERROR:', error);
+      Alert.alert('Error', error.message || 'Failed to record video. Please try again.');
+    } finally {
+      setUploadingVlog(false);
+      setVlogProgress(0);
+    }
+  };
+
+  // Select video from library
+  const handleSelectVlog = async () => {
     try {
       setUploadingVlog(true);
       const result = await pickMedia('video');
@@ -204,7 +293,15 @@ const CreatePostScreen = () => {
       }
     } catch (error) {
       console.error('❌ VLOG UPLOAD ERROR:', error);
-      Alert.alert('Error', 'Failed to upload vlog. Please try again.');
+      
+      // Show specific error message if it's a file size issue
+      const errorMessage = error.message || 'Failed to upload vlog. Please try again.';
+      const isFileSizeError = errorMessage.includes('too large') || errorMessage.includes('Too large');
+      
+      Alert.alert(
+        isFileSizeError ? 'Video Too Large' : 'Upload Error',
+        errorMessage
+      );
     } finally {
       setUploadingVlog(false);
       setVlogProgress(0);
@@ -323,6 +420,27 @@ const CreatePostScreen = () => {
       }
 
       setUploading(true);
+      setUploadProgress(0);
+      
+      // Fun loading messages
+      const messages = [
+        '🎒 Packing your memories...',
+        '✈️ Boarding the upload flight...',
+        '📸 Polishing your photos...',
+        '🗺️ Mapping your journey...',
+        '🌟 Adding sparkle to your story...',
+        '🚀 Almost there...',
+        '🎉 Finalizing your adventure...',
+      ];
+      
+      let messageIndex = 0;
+      setLoadingMessage(messages[0]);
+      
+      // Rotate messages every 1.5 seconds
+      loadingMessageInterval.current = setInterval(() => {
+        messageIndex = (messageIndex + 1) % messages.length;
+        setLoadingMessage(messages[messageIndex]);
+      }, 1500);
 
       // Upload media to Cloudinary first
       const cloudinaryResult = await uploadMediaToCloudinary(
@@ -402,14 +520,25 @@ const CreatePostScreen = () => {
         vlogs: formData.vlogs.length > 0 ? formData.vlogs : undefined,
       };
 
-      console.log('📝 CREATING POST...', postData);
+      console.log('📝 CREATING POST...');
+      console.log('📹 VLOGS IN FORM DATA:', formData.vlogs);
+      console.log('📹 VLOGS COUNT:', formData.vlogs.length);
+      console.log('📹 POST DATA VLOGS:', postData.vlogs);
+      console.log('📦 FULL POST DATA:', JSON.stringify(postData, null, 2));
 
       // Create post
       const post = await createPost(postData, token);
 
       console.log('✅ POST CREATED:', post._id);
 
+      // Clear loading message interval
+      if (loadingMessageInterval.current) {
+        clearInterval(loadingMessageInterval.current);
+        loadingMessageInterval.current = null;
+      }
+
       setUploading(false);
+      setLoadingMessage('Publishing...');
       
       // Show success message
       Alert.alert(
@@ -460,7 +589,14 @@ const CreatePostScreen = () => {
         stack: error.stack,
       });
       
+      // Clear loading message interval
+      if (loadingMessageInterval.current) {
+        clearInterval(loadingMessageInterval.current);
+        loadingMessageInterval.current = null;
+      }
+      
       setUploading(false);
+      setLoadingMessage('Publishing...');
       
       // Handle specific error cases
       if (error.message && error.message.includes('Not authorized')) {
@@ -1233,12 +1369,14 @@ const CreatePostScreen = () => {
             style={styles.gradientButton}
           >
             {uploading ? (
-              <>
-                <ActivityIndicator color="#FFFFFF" />
+              <View style={styles.uploadingContainer}>
                 <Text style={styles.continueButtonText}>
-                  {uploadProgress > 0 ? `${Math.round(uploadProgress)}%` : 'Creating...'}
+                  {loadingMessage}
                 </Text>
-              </>
+                <Text style={[styles.uploadProgressText, { fontSize: FONT_SIZES.xs }]}>
+                  {uploadProgress > 0 ? `${Math.round(uploadProgress)}%` : '...'}
+                </Text>
+              </View>
             ) : (
               <>
                 <Text style={styles.continueButtonText}>Publish</Text>
@@ -1374,17 +1512,11 @@ const CreatePostScreen = () => {
       {/* Progress Indicator */}
       {step < 4 && (
         <View style={styles.progressContainer}>
-          <View style={[styles.progressBar, { backgroundColor: colors.border }]}>
-            <Animated.View
-              style={[
-                styles.progressFill,
-                {
-                  backgroundColor: colors.primary,
-                  width: `${(step / 3) * 100}%`,
-                },
-              ]}
-            />
-          </View>
+          <WaterWaveLoader 
+            progress={(step / 3) * 100}
+            height={4}
+            color={colors.primary}
+          />
           <Text style={[styles.progressText, { color: colors.textSecondary }]}>
             {`Step ${step} of 3`}
           </Text>
@@ -1406,6 +1538,41 @@ const CreatePostScreen = () => {
           {step === 4 && renderSuccessStep()}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Upload Progress Modal */}
+      {uploading && (
+        <View style={[styles.uploadModal, { backgroundColor: colors.background + 'F0' }]}>
+          <View style={[styles.uploadModalContent, { backgroundColor: colors.card }]}>
+            <View style={styles.uploadIconContainer}>
+              <LinearGradient
+                colors={[colors.primary, colors.accent]}
+                style={styles.uploadIconGradient}
+              >
+                <Ionicons name="cloud-upload" size={48} color="#FFFFFF" />
+              </LinearGradient>
+            </View>
+            
+            <Text style={[styles.uploadModalTitle, { color: colors.text }]}>
+              {loadingMessage}
+            </Text>
+            
+            <View style={styles.uploadProgressContainer}>
+              <WaterWaveLoader 
+                progress={uploadProgress}
+                height={8}
+                color={colors.accent}
+              />
+              <Text style={[styles.uploadProgressPercentage, { color: colors.accent }]}>
+                {uploadProgress > 0 ? `${Math.round(uploadProgress)}%` : 'Preparing...'}
+              </Text>
+            </View>
+            
+            <Text style={[styles.uploadModalHint, { color: colors.textSecondary }]}>
+              Please don't close the app
+            </Text>
+          </View>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -1964,6 +2131,67 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     minHeight: 80,
     textAlignVertical: 'top',
+  },
+  // Upload Modal
+  uploadModal: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  uploadModalContent: {
+    width: width * 0.85,
+    padding: SPACING.xxl,
+    borderRadius: BORDER_RADIUS.xl,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  uploadIconContainer: {
+    marginBottom: SPACING.lg,
+  },
+  uploadIconGradient: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  uploadModalTitle: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: FONT_WEIGHTS.bold,
+    textAlign: 'center',
+    marginBottom: SPACING.xl,
+  },
+  uploadProgressContainer: {
+    width: '100%',
+    marginBottom: SPACING.md,
+  },
+  uploadProgressPercentage: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: FONT_WEIGHTS.bold,
+    textAlign: 'center',
+    marginTop: SPACING.md,
+  },
+  uploadModalHint: {
+    fontSize: FONT_SIZES.sm,
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  uploadingContainer: {
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  uploadProgressText: {
+    color: '#FFFFFF',
+    fontWeight: FONT_WEIGHTS.semibold,
   },
 });
 

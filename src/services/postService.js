@@ -19,9 +19,11 @@ export const pickMedia = async (type = 'video') => {
     // Pick media
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: type === 'video' ? ['videos'] : type === 'image' ? ['images'] : ['videos', 'images'],
-      allowsEditing: false, // Don't edit to preserve metadata
-      quality: 1, // Maximum quality to preserve metadata
+      allowsEditing: type === 'video', // Allow editing for videos to enable trimming
+      quality: 0.5, // Lower quality for smaller file size: 50%
       videoMaxDuration: 60, // 60 seconds max
+      videoQuality: ImagePicker.UIImagePickerControllerQualityType.Low, // Use low quality for smaller files
+      videoExportPreset: ImagePicker.VideoExportPreset.LowQuality, // Low quality export for compression
       exif: true, // Get EXIF data
     });
 
@@ -41,6 +43,29 @@ export const pickMedia = async (type = 'video') => {
       hasExif: !!asset.exif,
       assetId: asset.assetId, // Check if assetId is available
     });
+
+    // Check video file size and warn if too large
+    if (type === 'video' && asset.fileSize) {
+      const fileSizeInMB = asset.fileSize / (1024 * 1024);
+      console.log(`📦 VIDEO SIZE: ${fileSizeInMB.toFixed(2)} MB`);
+      
+      // Cloudinary free tier limit is 100MB per file
+      if (fileSizeInMB > 100) {
+        console.warn('⚠️ WARNING: Video exceeds Cloudinary free tier limit');
+        throw new Error(
+          `Video too large (${fileSizeInMB.toFixed(0)}MB). Maximum: 100MB\n\n` +
+          `✂️ Please trim your video:\n` +
+          `• Drag the yellow handles to select 30-60 seconds\n` +
+          `• Or use "Record New Video" (auto-compressed)\n\n` +
+          `💡 Shorter videos = Better engagement!`
+        );
+      }
+      
+      // Warn if video is large
+      if (fileSizeInMB > 50) {
+        console.warn(`⚠️ Large video (${fileSizeInMB.toFixed(0)}MB). Upload will take 1-2 minutes...`);
+      }
+    }
 
     // Extract metadata from EXIF
     let metadata = {
@@ -342,6 +367,28 @@ export const uploadMediaToCloudinary = async (mediaUri, type = 'video', onProgre
   try {
     console.log('☁️ UPLOADING TO CLOUDINARY:', { type, uri: mediaUri });
 
+    // Get file info to check size
+    const fileInfo = await fetch(mediaUri);
+    const blob = await fileInfo.blob();
+    const fileSizeInMB = blob.size / (1024 * 1024);
+    
+    console.log('📦 FILE SIZE:', `${fileSizeInMB.toFixed(2)} MB`);
+    
+    // Check file size limits (Cloudinary free tier: 100MB per file)
+    const maxSize = type === 'video' ? 100 : 10; // 100MB for videos, 10MB for images
+    if (fileSizeInMB > maxSize) {
+      throw new Error(
+        `File too large: ${fileSizeInMB.toFixed(1)}MB. Maximum: ${maxSize}MB.\n\n` +
+        `This is a Cloudinary free tier limitation.\n` +
+        `Please trim your video to under 60 seconds.`
+      );
+    }
+    
+    // Warn if video is large (will take longer to upload)
+    if (type === 'video' && fileSizeInMB > 50) {
+      console.warn('⚠️ Large video file (50MB+). Upload may take 1-2 minutes...');
+    }
+
     // Create form data
     const formData = new FormData();
     
@@ -356,6 +403,11 @@ export const uploadMediaToCloudinary = async (mediaUri, type = 'video', onProgre
     
     formData.append('upload_preset', CLOUDINARY_CONFIG.uploadPreset);
     formData.append('folder', 'tripmate_posts');
+    
+    // Resource type for videos
+    if (type === 'video') {
+      formData.append('resource_type', 'video');
+    }
 
     const resourceType = type === 'video' ? 'video' : 'image';
     const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CONFIG.cloudName}/${resourceType}/upload`;
@@ -377,40 +429,68 @@ export const uploadMediaToCloudinary = async (mediaUri, type = 'video', onProgre
 
       xhr.addEventListener('load', () => {
         if (xhr.status === 200) {
-          const response = JSON.parse(xhr.responseText);
-          console.log('✅ CLOUDINARY UPLOAD SUCCESS:', {
-            url: response.secure_url,
-            publicId: response.public_id,
-            duration: response.duration,
+          try {
+            const response = JSON.parse(xhr.responseText);
+            console.log('✅ CLOUDINARY UPLOAD SUCCESS:', {
+              url: response.secure_url,
+              publicId: response.public_id,
+              duration: response.duration,
+            });
+            
+            // Generate thumbnail URL for videos (first frame at 0 seconds)
+            let thumbnailUrl = response.secure_url;
+            if (type === 'video' && response.public_id) {
+              // For videos, create a thumbnail URL pointing to the first frame
+              thumbnailUrl = `https://res.cloudinary.com/${CLOUDINARY_CONFIG.cloudName}/video/upload/so_0,w_400,h_600,c_fill/${response.public_id}.jpg`;
+            }
+            
+            resolve({
+              url: response.secure_url,
+              publicId: response.public_id,
+              thumbnail: thumbnailUrl,
+              duration: response.duration,
+              width: response.width,
+              height: response.height,
+              format: response.format,
+            });
+          } catch (parseError) {
+            console.error('❌ PARSE ERROR:', parseError);
+            console.error('❌ RESPONSE TEXT:', xhr.responseText);
+            reject(new Error('Failed to parse upload response'));
+          }
+        } else {
+          console.error('❌ CLOUDINARY UPLOAD FAILED:', {
+            status: xhr.status,
+            statusText: xhr.statusText,
+            response: xhr.responseText,
           });
           
-          // Generate thumbnail URL for videos (first frame at 0 seconds)
-          let thumbnailUrl = response.secure_url;
-          if (type === 'video' && response.public_id) {
-            // For videos, create a thumbnail URL pointing to the first frame
-            thumbnailUrl = `https://res.cloudinary.com/${CLOUDINARY_CONFIG.cloudName}/video/upload/so_0,w_400,h_600,c_fill/${response.public_id}.jpg`;
+          let errorMessage = 'Upload failed';
+          try {
+            const errorData = JSON.parse(xhr.responseText);
+            errorMessage = errorData.error?.message || errorData.message || errorMessage;
+          } catch (e) {
+            // If HTML response (like 413 error), provide helpful message
+            if (xhr.status === 413) {
+              errorMessage = 'File too large for server. Please use a video under 100MB or try "Record New Video" option.';
+            }
           }
           
-          resolve({
-            url: response.secure_url,
-            publicId: response.public_id,
-            thumbnail: thumbnailUrl,
-            duration: response.duration,
-            width: response.width,
-            height: response.height,
-            format: response.format,
-          });
-        } else {
-          console.error('❌ CLOUDINARY UPLOAD FAILED:', xhr.responseText);
-          reject(new Error('Upload failed'));
+          reject(new Error(`Upload failed (${xhr.status}): ${errorMessage}`));
         }
       });
 
-      xhr.addEventListener('error', () => {
-        console.error('❌ CLOUDINARY UPLOAD ERROR');
-        reject(new Error('Upload error'));
+      xhr.addEventListener('error', (event) => {
+        console.error('❌ CLOUDINARY NETWORK ERROR:', event);
+        reject(new Error('Network error during upload. Please check your connection.'));
       });
 
+      xhr.addEventListener('timeout', () => {
+        console.error('❌ CLOUDINARY UPLOAD TIMEOUT');
+        reject(new Error('Upload timeout. Please check your connection and try again.'));
+      });
+
+      xhr.timeout = 300000; // 5 minutes timeout
       xhr.open('POST', uploadUrl);
       xhr.send(formData);
     });

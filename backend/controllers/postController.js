@@ -16,7 +16,9 @@ exports.createPost = async (req, res) => {
   try {
     console.log('📝 CREATE POST REQUEST:', {
       userId: req.user._id,
-      body: req.body,
+      hasVlogs: !!req.body.vlogs,
+      vlogsCount: req.body.vlogs?.length || 0,
+      body: JSON.stringify(req.body, null, 2),
     });
 
     const {
@@ -26,6 +28,7 @@ exports.createPost = async (req, res) => {
       media,
       metadata,
       tripDetails,
+      vlogs,
       isAIGenerated,
       aiSuggestions,
     } = req.body;
@@ -38,6 +41,8 @@ exports.createPost = async (req, res) => {
       });
     }
 
+    console.log('📹 VLOGS TO SAVE:', vlogs);
+
     // Create post
     const post = await Post.create({
       user: req.user._id,
@@ -47,6 +52,7 @@ exports.createPost = async (req, res) => {
       media,
       metadata,
       tripDetails,
+      vlogs: vlogs || [],
       isAIGenerated: isAIGenerated || false,
       aiSuggestions,
     });
@@ -253,6 +259,24 @@ exports.deletePost = async (req, res) => {
       } catch (cloudinaryError) {
         console.error('⚠️ CLOUDINARY DELETE ERROR:', cloudinaryError);
         // Continue with post deletion even if Cloudinary fails
+      }
+    }
+
+    // Delete vlogs from Cloudinary
+    if (post.vlogs && post.vlogs.length > 0) {
+      console.log('🗑️ DELETING VLOGS FROM CLOUDINARY:', post.vlogs.length);
+      for (const vlog of post.vlogs) {
+        if (vlog.publicId) {
+          try {
+            await cloudinary.uploader.destroy(vlog.publicId, {
+              resource_type: 'video',
+            });
+            console.log('🗑️ VLOG DELETED FROM CLOUDINARY:', vlog.publicId);
+          } catch (cloudinaryError) {
+            console.error('⚠️ CLOUDINARY VLOG DELETE ERROR:', cloudinaryError);
+            // Continue with post deletion even if Cloudinary fails
+          }
+        }
       }
     }
 

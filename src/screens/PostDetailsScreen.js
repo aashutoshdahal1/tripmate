@@ -68,26 +68,7 @@ const PostDetailsScreen = () => {
     }
   }, [id]);
 
-  // Auto-generate itinerary when user opens itinerary tab without existing itinerary
-  useEffect(() => {
-    if (
-      activeTab === 'itinerary' &&
-      post &&
-      userLocation &&
-      distance !== null &&
-      !post.tripDetails?.itinerary?.length &&
-      !generatedItinerary &&
-      !generatingItinerary &&
-      !hasGeneratedOnce // Don't auto-generate if already generated once
-    ) {
-      // Auto-trigger generation after a short delay
-      const timer = setTimeout(() => {
-        console.log('🤖 Auto-triggering itinerary generation...');
-        generateSmartItinerary();
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [activeTab, post, userLocation, distance, generatedItinerary, hasGeneratedOnce]);
+  // Removed auto-generation - itinerary only generates when user clicks the button
 
   const fetchPostData = async () => {
     try {
@@ -361,15 +342,8 @@ const PostDetailsScreen = () => {
       
       setHasGeneratedOnce(true); // Mark that we've generated once
       
-      Alert.alert(
-        '✨ AI Itinerary Generated!',
-        `Gemini AI created a ${aiData.duration}-day personalized journey!\n\n` +
-        `🎯 Interests: ${requestData.interests.length > 0 ? requestData.interests.join(', ') : 'general exploration'}\n` +
-        `💰 Budget: NPR ${aiData.totalBudget.toLocaleString()}\n` +
-        `📏 Distance: ${distance.toFixed(0)} km\n\n` +
-        (aiData.tips && aiData.tips.length > 0 ? `💡 Tips included!` : ''),
-        [{ text: 'View Itinerary' }]
-      );
+      // Success - itinerary generated and displayed
+      console.log('✅ Itinerary generation complete!');
     } catch (error) {
       console.error('❌ Error generating AI itinerary:', error);
       Alert.alert(
@@ -406,19 +380,17 @@ const PostDetailsScreen = () => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Simple Header - Always Visible */}
-      <View style={[styles.header, { backgroundColor: colors.card }, shadows.sm]}>
+      {/* Transparent Header - Always Visible Over Content */}
+      <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
+          <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
-          Trip Details
-        </Text>
+        <View style={{ width: 40 }} />
         <TouchableOpacity onPress={handleSave} style={styles.headerButton}>
           <Ionicons 
             name={isSaved ? "bookmark" : "bookmark-outline"} 
             size={24} 
-            color={isSaved ? colors.primary : colors.text} 
+            color="#FFFFFF"
           />
         </TouchableOpacity>
       </View>
@@ -450,14 +422,14 @@ const PostDetailsScreen = () => {
       {/* Content - Only show when post is loaded */}
       {!loading && !error && post && (
         <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Hero Image/Video Section */}
-        <View style={styles.imageContainer}>
+        {/* Hero Image/Video Section - Full Screen */}
+        <View style={styles.heroContainer}>
           {post.media?.type === 'video' ? (
             <>
               <Video
                 ref={videoRef}
                 source={{ uri: post.media.url }}
-                style={styles.mainImage}
+                style={styles.heroMedia}
                 resizeMode={ResizeMode.COVER}
                 shouldPlay={true}
                 isLooping={true}
@@ -493,28 +465,43 @@ const PostDetailsScreen = () => {
           ) : (
             <Image
               source={{ uri: post.media?.url || post.media?.thumbnail }}
-              style={styles.mainImage}
+              style={styles.heroMedia}
               resizeMode="cover"
             />
           )}
-        </View>
-
-        {/* Content Container */}
-        <View style={styles.contentContainer}>
-          {/* Title & Location */}
-          <View style={styles.titleSection}>
-            <Text style={[styles.title, { color: colors.text }]}>{post.title}</Text>
-            <View style={styles.locationRow}>
-              <Ionicons name="location" size={18} color={colors.primary} />
-              <Text style={[styles.locationText, { color: colors.textSecondary }]}>
+          
+          {/* Gradient Overlays */}
+          <LinearGradient
+            colors={['rgba(0,0,0,0.6)', 'transparent']}
+            style={styles.topGradient}
+          />
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.8)']}
+            style={styles.bottomGradient}
+          />
+          
+          {/* Floating Title & Location - Over the video */}
+          <View style={styles.floatingContent}>
+            <Text style={styles.floatingTitle}>{post.title}</Text>
+            <View style={styles.floatingLocationRow}>
+              <Ionicons name="location" size={16} color="#FFFFFF" />
+              <Text style={styles.floatingLocationText}>
                 {post.location?.name || post.location?.address || 'Unknown Location'}
               </Text>
             </View>
             {post.description && (
-              <Text style={[styles.description, { color: colors.textSecondary, marginTop: 12 }]}>
+              <Text style={styles.floatingDescription} numberOfLines={2}>
                 {post.description}
               </Text>
             )}
+          </View>
+        </View>
+
+        {/* Content Container - Rounded Card Overlay */}
+        <View style={[styles.contentContainer, { backgroundColor: colors.background }]}>
+          {/* Pull Indicator */}
+          <View style={styles.pullIndicatorContainer}>
+            <View style={[styles.pullIndicator, { backgroundColor: colors.border }]} />
           </View>
 
           {/* Quick Info Cards */}
@@ -641,49 +628,58 @@ const PostDetailsScreen = () => {
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
                   Vlogs ({post.vlogs?.length || 0})
                 </Text>
+                {(() => {
+                  console.log('🎬 VLOG TAB - Post vlogs:', post.vlogs);
+                  console.log('🎬 VLOG TAB - Vlogs length:', post.vlogs?.length);
+                  console.log('🎬 VLOG TAB - Has vlogs:', post.vlogs && post.vlogs.length > 0);
+                  return null;
+                })()}
                 {post.vlogs && post.vlogs.length > 0 ? (
                   <View style={styles.vlogGrid}>
-                    {post.vlogs.map((vlog, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        style={[styles.vlogCard, { backgroundColor: colors.card }, shadows.sm]}
-                        activeOpacity={0.8}
-                      >
-                        {/* Thumbnail */}
-                        <View style={styles.vlogThumbnail}>
-                          <Image source={{ uri: vlog.thumbnail || vlog.uri }} style={styles.vlogImage} />
-                          <LinearGradient
-                            colors={['transparent', 'rgba(0,0,0,0.6)']}
-                            style={styles.vlogGradient}
-                          />
-                          {/* Play Icon */}
-                          <View style={styles.playIconContainer}>
-                            <Ionicons name="play-circle" size={48} color="#FFFFFF" />
+                    {post.vlogs.map((vlog, index) => {
+                      console.log(`🎬 Rendering vlog ${index}:`, vlog);
+                      return (
+                        <TouchableOpacity
+                          key={index}
+                          style={[styles.vlogCard, { backgroundColor: colors.card }, shadows.sm]}
+                          activeOpacity={0.8}
+                        >
+                          {/* Thumbnail */}
+                          <View style={styles.vlogThumbnail}>
+                            <Image source={{ uri: vlog.thumbnail || vlog.uri }} style={styles.vlogImage} />
+                            <LinearGradient
+                              colors={['transparent', 'rgba(0,0,0,0.6)']}
+                              style={styles.vlogGradient}
+                            />
+                            {/* Play Icon */}
+                            <View style={styles.playIconContainer}>
+                              <Ionicons name="play-circle" size={48} color="#FFFFFF" />
+                            </View>
+                            {/* Duration Badge */}
+                            {vlog.duration && (
+                              <View style={styles.durationBadge}>
+                                <Text style={styles.durationText}>
+                                  {Math.floor(vlog.duration / 60)}:{(vlog.duration % 60).toString().padStart(2, '0')}
+                                </Text>
+                              </View>
+                            )}
                           </View>
-                          {/* Duration Badge */}
-                          {vlog.duration && (
-                            <View style={styles.durationBadge}>
-                              <Text style={styles.durationText}>
-                                {Math.floor(vlog.duration / 60)}:{(vlog.duration % 60).toString().padStart(2, '0')}
+
+                          {/* Vlog Info */}
+                          <View style={styles.vlogInfo}>
+                            <Text style={[styles.vlogTitle, { color: colors.text }]} numberOfLines={2}>
+                              {vlog.title || `Vlog ${index + 1}`}
+                            </Text>
+                            <View style={styles.vlogStats}>
+                              <Ionicons name="videocam-outline" size={14} color={colors.textSecondary} />
+                              <Text style={[styles.vlogViews, { color: colors.textSecondary }]}>
+                                {vlog.duration ? `${Math.floor(vlog.duration / 60)}:${(vlog.duration % 60).toString().padStart(2, '0')}` : 'Video'}
                               </Text>
                             </View>
-                          )}
-                        </View>
-
-                        {/* Vlog Info */}
-                        <View style={styles.vlogInfo}>
-                          <Text style={[styles.vlogTitle, { color: colors.text }]} numberOfLines={2}>
-                            {vlog.title || `Vlog ${index + 1}`}
-                          </Text>
-                          <View style={styles.vlogStats}>
-                            <Ionicons name="videocam-outline" size={14} color={colors.textSecondary} />
-                            <Text style={[styles.vlogViews, { color: colors.textSecondary }]}>
-                              {vlog.duration ? `${Math.floor(vlog.duration / 60)}:${(vlog.duration % 60).toString().padStart(2, '0')}` : 'Video'}
-                            </Text>
                           </View>
-                        </View>
-                      </TouchableOpacity>
-                    ))}
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
                 ) : (
                   <View style={styles.emptyVlog}>
@@ -994,7 +990,7 @@ const PostDetailsScreen = () => {
                       <Text style={styles.generateButtonText}>
                         {post.tripDetails?.itinerary && post.tripDetails.itinerary.length > 0
                           ? '✨ Generate Route-Based Itinerary'
-                          : '🤖 Auto-Generate Smart Itinerary'}
+                          : 'Auto-Generate Smart Itinerary'}
                       </Text>
                     </>
                   )}
@@ -1264,9 +1260,7 @@ const PostDetailsScreen = () => {
                       <View style={[styles.emptyStateCircle, { backgroundColor: colors.primary + '10' }]}>
                         <Ionicons name="map-outline" size={48} color={colors.primary} />
                       </View>
-                      <Text style={[styles.emptyStateTitle, { color: colors.text }]}>
-                        No Itinerary Yet
-                      </Text>
+
                       <Text style={[styles.emptyStateSubtitle, { color: colors.textSecondary }]}>
                         Generate an AI-powered itinerary based on{'\n'}your location and preferences
                       </Text>
@@ -1422,37 +1416,119 @@ const styles = StyleSheet.create({
   },
   // Simple Header
   header: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     paddingTop: 50,
+    zIndex: 100,
   },
   headerButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
   },
   headerTitle: {
     flex: 1,
     fontSize: FONT_SIZES.lg,
     fontWeight: FONT_WEIGHTS.semibold,
     textAlign: 'center',
+    color: '#FFFFFF',
   },
-  // Image
-  imageContainer: {
+  // Hero Section - Full Screen Immersive
+  heroContainer: {
     width: width,
-    height: width * 0.75,
+    height: height * 0.65, // 65% of screen height
+    position: 'relative',
   },
-  mainImage: {
+  heroMedia: {
     width: '100%',
     height: '100%',
   },
-  // Content
+  topGradient: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 150,
+    zIndex: 1,
+  },
+  bottomGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 250,
+    zIndex: 1,
+  },
+  floatingContent: {
+    position: 'absolute',
+    bottom: SPACING.xl,
+    left: SPACING.lg,
+    right: SPACING.lg,
+    zIndex: 2,
+  },
+  floatingTitle: {
+    fontSize: FONT_SIZES.xxxl,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: '#FFFFFF',
+    marginBottom: SPACING.sm,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 8,
+  },
+  floatingLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: SPACING.xs,
+  },
+  floatingLocationText: {
+    fontSize: FONT_SIZES.md,
+    color: '#FFFFFF',
+    fontWeight: FONT_WEIGHTS.medium,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  floatingDescription: {
+    fontSize: FONT_SIZES.sm,
+    color: 'rgba(255, 255, 255, 0.9)',
+    lineHeight: 20,
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  // Content - Overlapping Card Design
   contentContainer: {
+    marginTop: -30,
+    borderTopLeftRadius: BORDER_RADIUS.xxl,
+    borderTopRightRadius: BORDER_RADIUS.xxl,
     paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  pullIndicatorContainer: {
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  pullIndicator: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
   },
   // Title Section
   titleSection: {
@@ -1998,15 +2074,17 @@ const styles = StyleSheet.create({
   },
   soundButton: {
     position: 'absolute',
-    bottom: SPACING.md,
-    left: SPACING.md,
+    bottom: SPACING.lg,
+    right: SPACING.lg,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   // AI Itinerary Generation
   generateButton: {
