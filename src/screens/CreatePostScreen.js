@@ -23,6 +23,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { BORDER_RADIUS, SPACING, FONT_SIZES, FONT_WEIGHTS } from '../constants/colors';
 import { pickMedia, uploadMediaToCloudinary, createPost } from '../services/postService';
+import LocationMap3D from '../components/LocationMap3D';
 
 const { width } = Dimensions.get('window');
 
@@ -345,6 +346,23 @@ const CreatePostScreen = () => {
             </View>
           )}
 
+          {/* Mini Map Preview */}
+          {mediaAsset.location && 
+           mediaAsset.location.latitude !== null && 
+           mediaAsset.location.longitude !== null && (
+            <View style={styles.miniMapContainer}>
+              <LocationMap3D 
+                location={{
+                  latitude: mediaAsset.location.latitude,
+                  longitude: mediaAsset.location.longitude,
+                  address: mediaAsset.location.address,
+                }}
+                height={150}
+                showControls={false}
+              />
+            </View>
+          )}
+
           <View style={styles.mediaActions}>
             <TouchableOpacity
               style={[styles.mediaActionButton, { backgroundColor: colors.card }]}
@@ -393,6 +411,25 @@ const CreatePostScreen = () => {
           {formData.location.name ? 'Confirm or edit the location' : 'Where did you go?'}
         </Text>
       </View>
+
+      {/* 3D Map Preview */}
+      {formData.location.coordinates && 
+       formData.location.coordinates.latitude !== null && 
+       formData.location.coordinates.longitude !== null && (
+        <View style={styles.mapContainer}>
+          <LocationMap3D 
+            location={{
+              latitude: formData.location.coordinates.latitude,
+              longitude: formData.location.coordinates.longitude,
+              address: {
+                formatted: formData.location.name || formData.location.address,
+              },
+            }}
+            height={300}
+            showControls={true}
+          />
+        </View>
+      )}
 
       <View style={styles.inputContainer}>
         <Text style={[styles.inputLabel, { color: colors.text }]}>Location *</Text>
@@ -883,6 +920,19 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.xs,
     fontWeight: FONT_WEIGHTS.semibold,
   },
+  miniMapContainer: {
+    position: 'absolute',
+    bottom: 80,
+    left: SPACING.md,
+    right: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
   mediaActions: {
     flexDirection: 'row',
     gap: SPACING.md,
@@ -943,6 +993,16 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.xs,
     marginTop: SPACING.xs,
     marginLeft: SPACING.xs,
+  },
+  mapContainer: {
+    marginBottom: SPACING.lg,
+    borderRadius: BORDER_RADIUS.xl,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
   },
   row: {
     flexDirection: 'row',
