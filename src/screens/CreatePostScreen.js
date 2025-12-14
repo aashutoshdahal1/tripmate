@@ -288,12 +288,7 @@ const CreatePostScreen = () => {
                   Auto-detect location
                 </Text>
               </View>
-              <View style={styles.uploadFeature}>
-                <Ionicons name="camera" size={14} color={colors.accent} />
-                <Text style={[styles.uploadFeatureText, { color: colors.textSecondary }]}>
-                  Extract metadata
-                </Text>
-              </View>
+>
             </View>
           </TouchableOpacity>
 
@@ -343,23 +338,6 @@ const CreatePostScreen = () => {
               <Text style={styles.locationBadgeText}>
                 {mediaAsset.location.address?.formatted || 'Location detected'}
               </Text>
-            </View>
-          )}
-
-          {/* Mini Map Preview */}
-          {mediaAsset.location && 
-           mediaAsset.location.latitude !== null && 
-           mediaAsset.location.longitude !== null && (
-            <View style={styles.miniMapContainer}>
-              <LocationMap3D 
-                location={{
-                  latitude: mediaAsset.location.latitude,
-                  longitude: mediaAsset.location.longitude,
-                  address: mediaAsset.location.address,
-                }}
-                height={150}
-                showControls={false}
-              />
             </View>
           )}
 

@@ -589,15 +589,16 @@ const HomeScreen = () => {
                   </View>
                 ) : (
                   <Image
-                    source={{ uri: trip.author.avatar }}
+                    source={{ uri: trip.author?.avatar || 'https://i.pravatar.cc/150?img=0' }}
                     style={styles.authorAvatar}
                   />
                 )}
                 <Text style={styles.authorName} numberOfLines={1}>
-                  {trip.author.name}
+                  {trip.author?.name || 'Unknown'}
                 </Text>
-              </TouchableOpacity>                {/* Interaction Buttons - Always Visible */}
-                <View style={styles.actionButtons}>
+              </TouchableOpacity>
+              {/* Interaction Buttons - Always Visible */}
+              <View style={styles.actionButtons}>
                   <TouchableOpacity
                     style={styles.actionButton}
                     onPress={(e) => {
@@ -615,7 +616,7 @@ const HomeScreen = () => {
                       styles.actionText, 
                       { color: likedTrips.includes(trip.id) ? "#FF3B30" : "#FFFFFF" }
                     ]}>
-                      {formatNumber(trip.likes + (likedTrips.includes(trip.id) ? 1 : 0))}
+                      {formatNumber((trip.likes || 0) + (likedTrips.includes(trip.id) ? 1 : 0))}
                     </Text>
                   </TouchableOpacity>
 
@@ -629,7 +630,7 @@ const HomeScreen = () => {
                   >
                     <Ionicons name="chatbubble-outline" size={20} color="#FFFFFF" />
                     <Text style={[styles.actionText, { color: '#FFFFFF' }]}>
-                      {trip.comments}
+                      {trip.comments || 0}
                     </Text>
                   </TouchableOpacity>
 
@@ -675,7 +676,7 @@ const HomeScreen = () => {
               >
                 {/* Trip Title - Bold, Scannable */}
                 <Text style={styles.tripTitle} numberOfLines={2}>
-                  {trip.title}
+                  {trip.title || 'Untitled Trip'}
                 </Text>
 
                 {/* Map Thumbnail Preview - Glass Morphism */}
