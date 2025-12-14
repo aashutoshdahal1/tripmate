@@ -49,6 +49,8 @@ const PostDetailsScreen = () => {
   const [generatedItinerary, setGeneratedItinerary] = useState(null);
   const [generatingItinerary, setGeneratingItinerary] = useState(false);
   const [showGenerated, setShowGenerated] = useState(false);
+  const [hasGeneratedOnce, setHasGeneratedOnce] = useState(false);
+  const [expandedDays, setExpandedDays] = useState({});
   
   const scrollY = useRef(new Animated.Value(0)).current;
   const saveAnim = useRef(new Animated.Value(1)).current;
@@ -75,7 +77,8 @@ const PostDetailsScreen = () => {
       distance !== null &&
       !post.tripDetails?.itinerary?.length &&
       !generatedItinerary &&
-      !generatingItinerary
+      !generatingItinerary &&
+      !hasGeneratedOnce // Don't auto-generate if already generated once
     ) {
       // Auto-trigger generation after a short delay
       const timer = setTimeout(() => {
@@ -84,7 +87,7 @@ const PostDetailsScreen = () => {
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [activeTab, post, userLocation, distance, generatedItinerary]);
+  }, [activeTab, post, userLocation, distance, generatedItinerary, hasGeneratedOnce]);
 
   const fetchPostData = async () => {
     try {
@@ -355,6 +358,8 @@ const PostDetailsScreen = () => {
 
       setGeneratedItinerary(transformedItinerary);
       setShowGenerated(true);
+      
+      setHasGeneratedOnce(true); // Mark that we've generated once
       
       Alert.alert(
         '✨ AI Itinerary Generated!',
@@ -966,28 +971,35 @@ const PostDetailsScreen = () => {
 
           {activeTab === 'itinerary' && (
             <View style={styles.tabContent}>
-              {/* AI Generate Button - Always show */}
-              <TouchableOpacity
-                style={[styles.generateButton, { backgroundColor: colors.accent }, shadows.md]}
-                onPress={generateSmartItinerary}
-                disabled={generatingItinerary || !userLocation}
-              >
-                {generatingItinerary ? (
-                  <>
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                    <Text style={styles.generateButtonText}>Generating Your Route...</Text>
-                  </>
-                ) : (
-                  <>
-                    <Ionicons name="sparkles" size={20} color="#FFFFFF" />
-                    <Text style={styles.generateButtonText}>
-                      {post.tripDetails?.itinerary && post.tripDetails.itinerary.length > 0
-                        ? '✨ Generate Route-Based Itinerary'
-                        : '🤖 Auto-Generate Smart Itinerary'}
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              {/* AI Generate Button - Show only if not generated yet */}
+              {!hasGeneratedOnce && (
+                <TouchableOpacity
+                  style={[
+                    styles.generateButton, 
+                    { backgroundColor: colors.accent },
+                    (!userLocation || generatingItinerary) && { opacity: 0.6 },
+                    shadows.md
+                  ]}
+                  onPress={generateSmartItinerary}
+                  disabled={generatingItinerary || !userLocation}
+                >
+                  {generatingItinerary ? (
+                    <>
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                      <Text style={styles.generateButtonText}>Generating Your Route...</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+                      <Text style={styles.generateButtonText}>
+                        {post.tripDetails?.itinerary && post.tripDetails.itinerary.length > 0
+                          ? '✨ Generate Route-Based Itinerary'
+                          : '🤖 Auto-Generate Smart Itinerary'}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              )}
 
               {!userLocation && !loadingLocation && (
                 <View style={[styles.infoBox, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}>
@@ -1118,6 +1130,12 @@ const PostDetailsScreen = () => {
                               <TouchableOpacity 
                                 style={[styles.dayCard, { backgroundColor: colors.card }, shadows.md]}
                                 activeOpacity={0.95}
+                                onPress={() => {
+                                  setExpandedDays(prev => ({
+                                    ...prev,
+                                    [day.day]: !prev[day.day]
+                                  }));
+                                }}
                               >
                                 {/* Card Header with Gradient */}
                                 <LinearGradient
@@ -1148,17 +1166,17 @@ const PostDetailsScreen = () => {
                                 <View style={styles.dayCardContent}>
                                   <View style={styles.activitiesSection}>
                                     <View style={styles.activitiesList}>
-                                      {day.activities.split('\n').filter(Boolean).slice(0, 5).map((activity, actIdx) => (
+                                      {day.activities.split('\n').filter(Boolean).slice(0, expandedDays[day.day] ? undefined : 5).map((activity, actIdx) => (
                                         <View key={actIdx} style={styles.activityRow}>
                                           <View style={[styles.activityDot, { backgroundColor: showGenerated ? colors.accent : colors.primary }]} />
-                                          <Text style={[styles.activityText, { color: colors.text }]} numberOfLines={2}>
+                                          <Text style={[styles.activityText, { color: colors.text }]}>
                                             {activity.replace('•', '').trim()}
                                           </Text>
                                         </View>
                                       ))}
-                                      {day.activities.split('\n').filter(Boolean).length > 5 && (
+                                      {!expandedDays[day.day] && day.activities.split('\n').filter(Boolean).length > 5 && (
                                         <Text style={[styles.moreActivitiesText, { color: colors.textSecondary }]}>
-                                          +{day.activities.split('\n').filter(Boolean).length - 5} more activities
+                                          Tap to see {day.activities.split('\n').filter(Boolean).length - 5} more activities
                                         </Text>
                                       )}
                                     </View>
@@ -1184,7 +1202,11 @@ const PostDetailsScreen = () => {
 
                                 {/* Expand Indicator */}
                                 <View style={styles.expandIndicator}>
-                                  <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                                  <Ionicons 
+                                    name={expandedDays[day.day] ? "chevron-up" : "chevron-down"} 
+                                    size={20} 
+                                    color={colors.textSecondary} 
+                                  />
                                 </View>
                               </TouchableOpacity>
                             </View>
