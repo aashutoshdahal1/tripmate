@@ -10,12 +10,16 @@ import {
   Image,
   ActivityIndicator,
   Alert,
+  Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { Video, ResizeMode } from 'expo-av';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import * as Location from 'expo-location';
 import { useTheme } from '../contexts/ThemeContext';
 import { BORDER_RADIUS, SPACING, FONT_SIZES, FONT_WEIGHTS } from '../constants/colors';
 import { getPostById } from '../services/postService';
@@ -38,11 +42,15 @@ const PostDetailsScreen = () => {
   const [loading, setLoading] = useState(true);
   const [post, setPost] = useState(null);
   const [error, setError] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
+  const [distance, setDistance] = useState(null);
+  const [loadingLocation, setLoadingLocation] = useState(false);
   
   const scrollY = useRef(new Animated.Value(0)).current;
   const saveAnim = useRef(new Animated.Value(1)).current;
   const likeAnim = useRef(new Animated.Value(1)).current;
   const videoRef = useRef(null);
+  const mapRef = useRef(null);
 
   // Fetch post data on mount
   useEffect(() => {
@@ -74,6 +82,11 @@ const PostDetailsScreen = () => {
       setPost(data);
       setIsSaved(data.saved || false);
       setIsLiked(data.liked || false);
+      
+      // Fetch user location if post has coordinates
+      if (data.location?.coordinates?.latitude && data.location?.coordinates?.longitude) {
+        fetchUserLocation(data.location.coordinates);
+      }
     } catch (err) {
       console.error('❌ Error loading post:', err);
       setError(err.message || 'Failed to load post');
@@ -83,11 +96,142 @@ const PostDetailsScreen = () => {
     }
   };
 
+  const fetchUserLocation = async (destinationCoords) => {
+    try {
+      setLoadingLocation(true);
+      console.log('📍 Fetching user location...');
+      
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('❌ Location permission denied');
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const userCoords = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+
+      setUserLocation(userCoords);
+
+      // Calculate distance using Haversine formula
+      const dist = calculateDistance(
+        userCoords.latitude,
+        userCoords.longitude,
+        destinationCoords.latitude,
+        destinationCoords.longitude
+      );
+
+      setDistance(dist);
+      console.log('✅ Distance calculated:', dist.toFixed(2), 'km');
+    } catch (err) {
+      console.error('❌ Error fetching location:', err);
+    } finally {
+      setLoadingLocation(false);
+    }
+  };
+
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Radius of the Earth in km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in km
+  };
+
+  const fitMapToMarkers = () => {
+    if (mapRef.current && userLocation && post?.location?.coordinates) {
+      // Don't auto-fit if distance is too large (> 1000 km)
+      // This prevents map crashes with very distant locations
+      if (distance > 1000) {
+        console.log('⚠️ Distance too large for auto-fit, keeping default view');
+        return;
+      }
+
+      try {
+        mapRef.current.fitToCoordinates(
+          [
+            userLocation,
+            {
+              latitude: post.location.coordinates.latitude,
+              longitude: post.location.coordinates.longitude,
+            },
+          ],
+          {
+            edgePadding: { top: 100, right: 100, bottom: 100, left: 100 },
+            animated: true,
+          }
+        );
+      } catch (err) {
+        console.error('❌ Error fitting map to markers:', err);
+      }
+    }
+  };
+
   const tabs = [
     { id: 'vlog', label: 'Vlog', icon: 'play-circle' },
+    { id: 'route', label: 'Route', icon: 'navigate' },
     { id: 'itinerary', label: 'Itinerary', icon: 'map' },
     { id: 'budget', label: 'Budget', icon: 'wallet' },
   ];
+
+  const openInMaps = async (latitude, longitude, label) => {
+    try {
+      const destination = `${latitude},${longitude}`;
+      const encodedLabel = encodeURIComponent(label);
+      
+      let url;
+      if (Platform.OS === 'ios') {
+        // Try Google Maps first if installed
+        const gmapsUrl = `comgooglemaps://?daddr=${destination}&directionsmode=driving`;
+        const canOpenGmaps = await Linking.canOpenURL(gmapsUrl);
+        
+        if (canOpenGmaps) {
+          url = gmapsUrl;
+        } else {
+          // Fallback to Apple Maps
+          url = `maps://app?daddr=${destination}&q=${encodedLabel}`;
+        }
+      } else {
+        // Android - try Google Maps app first
+        const gmapsUrl = `google.navigation:q=${destination}`;
+        const canOpenGmaps = await Linking.canOpenURL(gmapsUrl);
+        
+        if (canOpenGmaps) {
+          url = gmapsUrl;
+        } else {
+          // Fallback to web maps
+          url = `https://www.google.com/maps/dir/?api=1&destination=${destination}`;
+        }
+      }
+      
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert(
+          'Error',
+          'Could not open maps. Please install Google Maps or Apple Maps.'
+        );
+      }
+    } catch (error) {
+      console.error('Error opening maps:', error);
+      Alert.alert(
+        'Error',
+        'Failed to open maps. Please try again.'
+      );
+    }
+  };
 
   const handleSave = () => {
     Animated.sequence([
@@ -430,6 +574,278 @@ const PostDetailsScreen = () => {
                   </View>
                 )}
               </View>
+            </View>
+          )}
+
+          {activeTab === 'route' && (
+            <View style={styles.tabContent}>
+              {post.location?.coordinates?.latitude && post.location?.coordinates?.longitude ? (
+                <>
+                  {/* Distance Card */}
+                  <View style={[styles.distanceCard, { backgroundColor: colors.card }, shadows.md]}>
+                    <LinearGradient
+                      colors={[colors.primary, colors.primaryDark]}
+                      style={styles.distanceGradient}
+                    >
+                      <View style={styles.distanceIconContainer}>
+                        <Ionicons name="navigate-circle" size={48} color="#FFFFFF" />
+                      </View>
+                      <View style={styles.distanceInfo}>
+                        {loadingLocation ? (
+                          <>
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                            <Text style={styles.distanceLabel}>Calculating distance...</Text>
+                          </>
+                        ) : distance !== null ? (
+                          <>
+                            <Text style={styles.distanceValue}>
+                              {distance < 1 
+                                ? `${(distance * 1000).toFixed(0)} m` 
+                                : distance > 1000
+                                ? `${(distance / 1000).toFixed(1)}k km`
+                                : `${distance.toFixed(1)} km`}
+                            </Text>
+                            <Text style={styles.distanceLabel}>Distance from you</Text>
+                            <View style={styles.estimateRow}>
+                              <Ionicons 
+                                name={distance > 500 ? "airplane-outline" : "car-outline"} 
+                                size={16} 
+                                color="#FFFFFF" 
+                              />
+                              <Text style={styles.estimateText}>
+                                {distance > 500 
+                                  ? `~${Math.ceil(distance / 800)} hrs by flight`
+                                  : `~${Math.ceil(distance / 60)} hrs by car`}
+                              </Text>
+                            </View>
+                          </>
+                        ) : (
+                          <Text style={styles.distanceLabel}>Enable location to see distance</Text>
+                        )}
+                      </View>
+                    </LinearGradient>
+                  </View>
+
+                  {/* Location Details */}
+                  <View style={[styles.locationDetails, { backgroundColor: colors.card }, shadows.sm]}>
+                    <View style={styles.locationDetailRow}>
+                      <Ionicons name="location" size={20} color={colors.primary} />
+                      <View style={styles.locationDetailText}>
+                        <Text style={[styles.locationDetailLabel, { color: colors.textSecondary }]}>
+                          Destination
+                        </Text>
+                        <Text style={[styles.locationDetailValue, { color: colors.text }]}>
+                          {post.location.name || 'Unknown Location'}
+                        </Text>
+                      </View>
+                    </View>
+                    {post.location.address && (
+                      <View style={styles.locationDetailRow}>
+                        <Ionicons name="map-outline" size={20} color={colors.accent} />
+                        <View style={styles.locationDetailText}>
+                          <Text style={[styles.locationDetailLabel, { color: colors.textSecondary }]}>
+                            Address
+                          </Text>
+                          <Text style={[styles.locationDetailValue, { color: colors.text }]}>
+                            {post.location.address}
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                    <View style={styles.locationDetailRow}>
+                      <Ionicons name="compass-outline" size={20} color={colors.accent} />
+                      <View style={styles.locationDetailText}>
+                        <Text style={[styles.locationDetailLabel, { color: colors.textSecondary }]}>
+                          Coordinates
+                        </Text>
+                        <Text style={[styles.locationDetailValue, { color: colors.text }]}>
+                          {post.location.coordinates.latitude.toFixed(4)}, {post.location.coordinates.longitude.toFixed(4)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* 3D Map View */}
+                  <View style={[styles.mapContainer, shadows.lg]}>
+                    <MapView
+                      ref={mapRef}
+                      provider={PROVIDER_GOOGLE}
+                      style={styles.map}
+                      initialRegion={{
+                        latitude: post.location.coordinates.latitude,
+                        longitude: post.location.coordinates.longitude,
+                        // Cap deltas to prevent crashes with very far distances
+                        // Use smaller deltas for large distances to keep map focused
+                        latitudeDelta: userLocation && distance !== null
+                          ? (distance > 1000 
+                              ? 0.5 
+                              : Math.min(Math.max(Math.abs(userLocation.latitude - post.location.coordinates.latitude) * 2, 0.05), 20))
+                          : 0.1,
+                        longitudeDelta: userLocation && distance !== null
+                          ? (distance > 1000 
+                              ? 0.5 
+                              : Math.min(Math.max(Math.abs(userLocation.longitude - post.location.coordinates.longitude) * 2, 0.05), 20))
+                          : 0.1,
+                      }}
+                      camera={{
+                        center: {
+                          latitude: post.location.coordinates.latitude,
+                          longitude: post.location.coordinates.longitude,
+                        },
+                        pitch: distance > 1000 ? 0 : 60, // Use flat view for very far distances
+                        heading: 0,
+                        altitude: distance > 1000 ? 10000 : 3000, // Higher altitude for far distances
+                        zoom: distance > 1000 ? 4 : 12, // Zoom out for far distances
+                      }}
+                      mapType="satellite"
+                      showsBuildings={distance <= 1000} // Only show buildings for closer destinations
+                      showsTraffic={false}
+                      showsIndoors={distance <= 1000}
+                      onMapReady={fitMapToMarkers}
+                    >
+                      {/* Destination Marker */}
+                      <Marker
+                        coordinate={{
+                          latitude: post.location.coordinates.latitude,
+                          longitude: post.location.coordinates.longitude,
+                        }}
+                        title={post.location.name}
+                        description="Trip Destination"
+                      >
+                        <View style={styles.destinationMarker}>
+                          <View style={[styles.markerPulse, { backgroundColor: colors.accent }]} />
+                          <View style={[styles.markerInner, { backgroundColor: colors.accent }]}>
+                            <Ionicons name="flag" size={20} color="#FFFFFF" />
+                          </View>
+                        </View>
+                      </Marker>
+
+                      {/* User Location Marker */}
+                      {userLocation && (
+                        <Marker
+                          coordinate={userLocation}
+                          title="Your Location"
+                          description="Current Position"
+                        >
+                          <View style={styles.userMarker}>
+                            <View style={[styles.markerPulse, { backgroundColor: colors.primary }]} />
+                            <View style={[styles.markerInner, { backgroundColor: colors.primary }]}>
+                              <Ionicons name="person" size={16} color="#FFFFFF" />
+                            </View>
+                          </View>
+                        </Marker>
+                      )}
+
+                      {/* Route Line - Only show for distances under 1000km */}
+                      {userLocation && distance !== null && distance < 1000 && (
+                        <Polyline
+                          coordinates={[
+                            userLocation,
+                            {
+                              latitude: post.location.coordinates.latitude,
+                              longitude: post.location.coordinates.longitude,
+                            },
+                          ]}
+                          strokeColor={colors.primary}
+                          strokeWidth={3}
+                          lineDashPattern={[10, 5]}
+                        />
+                      )}
+                    </MapView>
+
+                    {/* Map Controls */}
+                    <View style={styles.mapControls}>
+                      <TouchableOpacity
+                        style={[styles.mapControlButton, { backgroundColor: colors.card }, shadows.sm]}
+                        onPress={() => {
+                          if (distance > 1000) {
+                            Alert.alert(
+                              'Distance Too Large',
+                              'The destination is over 1,000 km away. Map view is focused on the destination.',
+                              [{ text: 'OK' }]
+                            );
+                          } else {
+                            fitMapToMarkers();
+                          }
+                        }}
+                      >
+                        <Ionicons name="contract-outline" size={20} color={colors.primary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.mapControlButton, { backgroundColor: colors.card }, shadows.sm]}
+                        onPress={() => {
+                          if (mapRef.current) {
+                            mapRef.current.animateCamera({
+                              center: {
+                                latitude: post.location.coordinates.latitude,
+                                longitude: post.location.coordinates.longitude,
+                              },
+                              pitch: 60,
+                              heading: 0,
+                              altitude: 3000,
+                              zoom: 15,
+                            });
+                          }
+                        }}
+                      >
+                        <Ionicons name="cube-outline" size={20} color={colors.accent} />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Map Legend */}
+                    <View style={[styles.mapLegend, { backgroundColor: colors.card + 'DD' }]}>
+                      <Text style={[styles.mapLegendTitle, { color: colors.text }]}>
+                        {distance > 1000 ? 'Satellite View' : '3D Satellite View'}
+                      </Text>
+                      <Text style={[styles.mapLegendText, { color: colors.textSecondary }]}>
+                        {distance > 1000 
+                          ? 'Destination view • Route line hidden for very far distances'
+                          : 'Pinch to zoom • Drag to pan • Two fingers to rotate'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Action Buttons */}
+                  <View style={styles.actionButtons}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, { backgroundColor: colors.primary }, shadows.md]}
+                      onPress={() => {
+                        openInMaps(
+                          post.location.coordinates.latitude,
+                          post.location.coordinates.longitude,
+                          post.location.name
+                        );
+                      }}
+                    >
+                      <Ionicons name="navigate" size={20} color="#FFFFFF" />
+                      <Text style={styles.actionButtonText}>Get Directions</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, { backgroundColor: colors.accent }, shadows.md]}
+                      onPress={() => {
+                        Alert.alert(
+                          'Share Location',
+                          `Share ${post.location.name} with friends?`,
+                          [
+                            { text: 'Cancel', style: 'cancel' },
+                            { text: 'Share', onPress: () => console.log('Sharing location') },
+                          ]
+                        );
+                      }}
+                    >
+                      <Ionicons name="share-social" size={20} color="#FFFFFF" />
+                      <Text style={styles.actionButtonText}>Share Route</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.emptyVlog}>
+                  <Ionicons name="navigate-circle-outline" size={64} color={colors.textSecondary} />
+                  <Text style={[styles.emptyVlogText, { color: colors.textSecondary }]}>
+                    No location data available for this trip.
+                  </Text>
+                </View>
+              )}
             </View>
           )}
 
@@ -820,6 +1236,152 @@ const styles = StyleSheet.create({
   },
   includeText: {
     fontSize: FONT_SIZES.md,
+  },
+  // Route Section
+  distanceCard: {
+    borderRadius: BORDER_RADIUS.xl,
+    overflow: 'hidden',
+    marginBottom: SPACING.lg,
+  },
+  distanceGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.xl,
+    gap: SPACING.lg,
+  },
+  distanceIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  distanceInfo: {
+    flex: 1,
+  },
+  distanceValue: {
+    fontSize: 42,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  distanceLabel: {
+    fontSize: FONT_SIZES.md,
+    color: 'rgba(255, 255, 255, 0.9)',
+    marginBottom: 8,
+  },
+  estimateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  estimateText: {
+    fontSize: FONT_SIZES.sm,
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  locationDetails: {
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.lg,
+    marginBottom: SPACING.lg,
+    gap: SPACING.md,
+  },
+  locationDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.md,
+  },
+  locationDetailText: {
+    flex: 1,
+  },
+  locationDetailLabel: {
+    fontSize: FONT_SIZES.xs,
+    marginBottom: 4,
+  },
+  locationDetailValue: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.medium,
+  },
+  mapContainer: {
+    height: 400,
+    borderRadius: BORDER_RADIUS.xl,
+    overflow: 'hidden',
+    marginBottom: SPACING.lg,
+    position: 'relative',
+  },
+  map: {
+    flex: 1,
+  },
+  mapControls: {
+    position: 'absolute',
+    right: SPACING.md,
+    top: SPACING.md,
+    gap: SPACING.sm,
+  },
+  mapControlButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapLegend: {
+    position: 'absolute',
+    bottom: SPACING.md,
+    left: SPACING.md,
+    right: SPACING.md,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  mapLegendTitle: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: FONT_WEIGHTS.semibold,
+    marginBottom: 4,
+  },
+  mapLegendText: {
+    fontSize: FONT_SIZES.xs,
+  },
+  destinationMarker: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userMarker: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  markerPulse: {
+    position: 'absolute',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    opacity: 0.3,
+  },
+  markerInner: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+  },
+  actionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+  },
+  actionButtonText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.semibold,
   },
   // Itinerary
   dayContainer: {
