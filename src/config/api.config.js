@@ -32,6 +32,16 @@ export const API_ENDPOINTS = {
   GET_ME: '/auth/me',
   UPDATE_PROFILE: '/auth/profile',
   DELETE_IMAGE: '/auth/delete-image',
+  
+  // Posts
+  POSTS: '/posts',
+  CREATE_POST: '/posts',
+  GET_POST: (id) => `/posts/${id}`,
+  GET_USER_POSTS: (userId) => `/posts/user/${userId}`,
+  UPDATE_POST: (id) => `/posts/${id}`,
+  DELETE_POST: (id) => `/posts/${id}`,
+  LIKE_POST: (id) => `/posts/${id}/like`,
+  SAVE_POST: (id) => `/posts/${id}/save`,
 };
 
 // Helper function to get full URL

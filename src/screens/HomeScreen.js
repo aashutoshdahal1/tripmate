@@ -568,24 +568,35 @@ const HomeScreen = () => {
             >
               {/* Author & Interactions - Always Visible */}
               <View style={styles.interactionRow}>
-                {/* Author Info */}
-                <TouchableOpacity style={styles.authorInfo} activeOpacity={0.7}>
-                  {trip.isAISuggestion ? (
-                    <View style={[styles.aiAvatar, { backgroundColor: 'rgba(0,200,150,0.25)', borderWidth: 1.5, borderColor: colors.accent }]}>
-                      <Ionicons name="sparkles" size={14} color={colors.accent} />
-                    </View>
-                  ) : (
-                    <Image
-                      source={{ uri: trip.author.avatar }}
-                      style={styles.authorAvatar}
-                    />
-                  )}
-                  <Text style={styles.authorName} numberOfLines={1}>
-                    {trip.author.name}
-                  </Text>
-                </TouchableOpacity>
-
-                {/* Interaction Buttons - Always Visible */}
+              {/* Author Info */}
+              <TouchableOpacity 
+                style={styles.authorInfo} 
+                activeOpacity={0.7}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  if (!trip.isAISuggestion) {
+                    navigation.navigate('UserProfile', {
+                      userId: trip.author.name.toLowerCase().replace(/\s+/g, ''),
+                      userName: trip.author.name,
+                      userAvatar: trip.author.avatar,
+                    });
+                  }
+                }}
+              >
+                {trip.isAISuggestion ? (
+                  <View style={[styles.aiAvatar, { backgroundColor: 'rgba(0,200,150,0.25)', borderWidth: 1.5, borderColor: colors.accent }]}>
+                    <Ionicons name="sparkles" size={14} color={colors.accent} />
+                  </View>
+                ) : (
+                  <Image
+                    source={{ uri: trip.author.avatar }}
+                    style={styles.authorAvatar}
+                  />
+                )}
+                <Text style={styles.authorName} numberOfLines={1}>
+                  {trip.author.name}
+                </Text>
+              </TouchableOpacity>                {/* Interaction Buttons - Always Visible */}
                 <View style={styles.actionButtons}>
                   <TouchableOpacity
                     style={styles.actionButton}
@@ -753,7 +764,7 @@ const HomeScreen = () => {
 
 const formatNumber = (num) => {
   if (num >= 1000) {
-    return (num / 1000).toFixed(1) + 'k';
+    return `${(num / 1000).toFixed(1)}k`;
   }
   return num.toString();
 };
