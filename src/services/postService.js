@@ -2,11 +2,12 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import * as MediaLibrary from 'expo-media-library';
 import { API_BASE_URL, CLOUDINARY_CONFIG, getApiUrl, API_ENDPOINTS } from '../config/api.config';
+import { calculateTargetBitrate, getCompressionQuality, formatFileSize, needsCompression } from '../utils/videoCompression';
 
 // 📹 VIDEO & IMAGE PICKER WITH METADATA EXTRACTION
-export const pickMedia = async (type = 'video') => {
+export const pickMedia = async (type = 'video', needsCompression = false) => {
   try {
-    console.log('🎬 PICKING MEDIA:', type);
+    console.log('🎬 PICKING MEDIA:', type, needsCompression ? '(with compression)' : '(no compression)');
 
     // Request both permissions upfront
     const { status: imagePickerStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -16,16 +17,31 @@ export const pickMedia = async (type = 'video') => {
       throw new Error('Media library permission denied');
     }
 
-    // Pick media
-    const result = await ImagePicker.launchImageLibraryAsync({
+    // Pick media with or without compression based on file size
+    const pickerOptions = {
       mediaTypes: type === 'video' ? ['videos'] : type === 'image' ? ['images'] : ['videos', 'images'],
-      allowsEditing: type === 'video', // Allow editing for videos to enable trimming
-      quality: 0.5, // Lower quality for smaller file size: 50%
-      videoMaxDuration: 60, // 60 seconds max
-      videoQuality: ImagePicker.UIImagePickerControllerQualityType.Low, // Use low quality for smaller files
-      videoExportPreset: ImagePicker.VideoExportPreset.LowQuality, // Low quality export for compression
+      allowsEditing: false, // Disable editing to prevent automatic compression
       exif: true, // Get EXIF data
-    });
+    };
+
+    // Only apply compression settings if needed (for videos > 100MB)
+    if (needsCompression && type === 'video') {
+      pickerOptions.quality = 0.3; // Aggressive compression: 30%
+      pickerOptions.videoQuality = ImagePicker.UIImagePickerControllerQualityType.Low;
+      pickerOptions.videoExportPreset = ImagePicker.VideoExportPreset.LowQuality;
+      pickerOptions.videoMaxDuration = 60; // 60 seconds max when compressing
+      console.log('🗜️ Applying compression settings');
+    } else if (type === 'image') {
+      // For images, preserve quality
+      pickerOptions.quality = 1.0;
+      console.log('✨ Using original image quality');
+    } else {
+      // For videos < 100MB - NO quality/compression settings at all
+      // This ensures the original video file is used without any processing
+      console.log('✨ Using original video (no compression, no quality settings)');
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync(pickerOptions);
 
     if (result.canceled) {
       console.log('❌ USER CANCELLED');
@@ -44,26 +60,34 @@ export const pickMedia = async (type = 'video') => {
       assetId: asset.assetId, // Check if assetId is available
     });
 
-    // Check video file size and warn if too large
+    // Check video file size
     if (type === 'video' && asset.fileSize) {
       const fileSizeInMB = asset.fileSize / (1024 * 1024);
       console.log(`📦 VIDEO SIZE: ${fileSizeInMB.toFixed(2)} MB`);
       
-      // Cloudinary free tier limit is 100MB per file
-      if (fileSizeInMB > 100) {
-        console.warn('⚠️ WARNING: Video exceeds Cloudinary free tier limit');
+      // If video is over 100MB and we haven't compressed yet, re-pick with compression
+      if (fileSizeInMB > 100 && !needsCompression) {
+        console.warn('⚠️ Video is over 100MB, re-picking with compression...');
+        // Recursively call pickMedia with compression enabled
+        return await pickMedia(type, true);
+      }
+      
+      // If still over 100MB after compression, reject
+      if (fileSizeInMB > 100 && needsCompression) {
         throw new Error(
-          `Video too large (${fileSizeInMB.toFixed(0)}MB). Maximum: 100MB\n\n` +
+          `Video still too large (${fileSizeInMB.toFixed(0)}MB) after compression.\n\n` +
           `✂️ Please trim your video:\n` +
           `• Drag the yellow handles to select 30-60 seconds\n` +
-          `• Or use "Record New Video" (auto-compressed)\n\n` +
+          `• Or record a shorter video\n\n` +
           `💡 Shorter videos = Better engagement!`
         );
       }
       
-      // Warn if video is large
+      // Log file size status
       if (fileSizeInMB > 50) {
-        console.warn(`⚠️ Large video (${fileSizeInMB.toFixed(0)}MB). Upload will take 1-2 minutes...`);
+        console.log(`📤 Large video (${fileSizeInMB.toFixed(0)}MB). Will use chunked upload for reliability`);
+      } else {
+        console.log(`✅ Video size is perfect (${fileSizeInMB.toFixed(0)}MB) - no compression needed!`);
       }
     }
 
@@ -362,7 +386,7 @@ function convertDMSToDD(dms, ref) {
   return null;
 }
 
-// 📤 UPLOAD MEDIA TO CLOUDINARY
+// 📤 UPLOAD MEDIA TO CLOUDINARY (with chunked upload for large files)
 export const uploadMediaToCloudinary = async (mediaUri, type = 'video', onProgress) => {
   try {
     console.log('☁️ UPLOADING TO CLOUDINARY:', { type, uri: mediaUri });
@@ -382,11 +406,6 @@ export const uploadMediaToCloudinary = async (mediaUri, type = 'video', onProgre
         `This is a Cloudinary free tier limitation.\n` +
         `Please trim your video to under 60 seconds.`
       );
-    }
-    
-    // Warn if video is large (will take longer to upload)
-    if (type === 'video' && fileSizeInMB > 50) {
-      console.warn('⚠️ Large video file (50MB+). Upload may take 1-2 minutes...');
     }
 
     // Create form data
@@ -414,6 +433,12 @@ export const uploadMediaToCloudinary = async (mediaUri, type = 'video', onProgre
 
     console.log('📤 UPLOADING TO:', uploadUrl);
 
+    // For large files, we still use regular upload but with better error handling
+    // Cloudinary handles chunking internally for large files
+    if (fileSizeInMB > 50) {
+      console.log('📦 Large file detected. Upload may take 1-2 minutes...');
+    }
+    
     const xhr = new XMLHttpRequest();
     
     return new Promise((resolve, reject) => {

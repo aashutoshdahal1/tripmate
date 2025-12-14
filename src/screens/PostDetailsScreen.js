@@ -504,24 +504,6 @@ const PostDetailsScreen = () => {
             <View style={[styles.pullIndicator, { backgroundColor: colors.border }]} />
           </View>
 
-          {/* Quick Info Cards */}
-          <View style={styles.quickInfoRow}>
-            <View style={[styles.infoCard, { backgroundColor: colors.card }, shadows.sm]}>
-              <Ionicons name="calendar-outline" size={20} color={colors.primary} />
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Duration</Text>
-              <Text style={[styles.infoValue, { color: colors.text }]}>
-                {post.tripDetails?.duration || 0} Days
-              </Text>
-            </View>
-            <View style={[styles.infoCard, { backgroundColor: colors.card }, shadows.sm]}>
-              <Ionicons name="wallet-outline" size={20} color={colors.accent} />
-              <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Cost</Text>
-              <Text style={[styles.infoValue, { color: colors.text }]}>
-                {post.tripDetails?.budget?.currency || 'NPR'} {((post.tripDetails?.budget?.amount || 0) / 1000).toFixed(1)}k
-              </Text>
-            </View>
-          </View>
-
           {/* Interests Tags */}
           {post.tripDetails?.interests && post.tripDetails.interests.length > 0 && (
             <View style={styles.interestsContainer}>

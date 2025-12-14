@@ -10,6 +10,8 @@ import {
   Dimensions,
   Animated,
   StatusBar,
+  ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +21,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { BORDER_RADIUS, SPACING, FONT_SIZES, FONT_WEIGHTS } from '../constants/colors';
 import { Video, ResizeMode } from 'expo-av';
 import { GestureHandlerRootView, PinchGestureHandler, State } from 'react-native-gesture-handler';
+import { getFeedPosts } from '../services/postService';
 
 /**
  * ═══════════════════════════════════════════════════════════════
@@ -81,10 +84,18 @@ const HomeScreen = () => {
   const [savedTrips, setSavedTrips] = useState([]);
   const [likedTrips, setLikedTrips] = useState([]);
   const [playingVideos, setPlayingVideos] = useState({}); // Track video play state
+  const [mutedVideos, setMutedVideos] = useState({}); // Track mute state per video
   const videoRefs = useRef({}); // Store video refs for each trip
   const [showOverlays, setShowOverlays] = useState({}); // Track overlay visibility per video
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0); // Track currently visible video
   const flatListRef = useRef(null); // Reference to FlatList
+  
+  // Dynamic data state
+  const [trips, setTrips] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   
   // Animation refs
   const likeAnimRefs = useRef({});
@@ -99,7 +110,100 @@ const HomeScreen = () => {
   // Double-tap handling
   const lastTap = useRef(null);
 
-  // 📹 VIDEO AUTOPLAY RECOMMENDATION:
+  // 📹 Fetch posts from API
+  useEffect(() => {
+    loadPosts();
+  }, []);
+
+  const loadPosts = async (pageNum = 1, shouldRefresh = false) => {
+    try {
+      if (shouldRefresh) {
+        setRefreshing(true);
+      } else if (pageNum === 1) {
+        setLoading(true);
+      }
+
+      console.log('🔄 Loading posts, page:', pageNum);
+      const response = await getFeedPosts(pageNum, 10);
+      
+      if (response && response.data) {
+        const newTrips = response.data.map(post => ({
+          id: post._id,
+          videoUrl: post.media?.url || '',
+          thumbnail: post.media?.thumbnail || post.media?.url,
+          title: post.title,
+          location: post.location?.name || 'Unknown',
+          country: 'Nepal', // Default for now
+          days: post.tripDetails?.duration || 0,
+          cost: post.tripDetails?.budget?.amount || 0,
+          currency: post.tripDetails?.budget?.currency || 'NPR',
+          author: {
+            name: post.user?.fullName || 'Anonymous',
+            avatar: post.user?.avatar || `https://i.pravatar.cc/150?img=${Math.floor(Math.random() * 70)}`,
+          },
+          likes: post.stats?.likes || 0,
+          comments: post.stats?.comments || 0,
+          saved: false,
+          isAISuggestion: post.isAIGenerated || false,
+        }));
+
+        if (shouldRefresh || pageNum === 1) {
+          setTrips(newTrips);
+          setPage(1);
+        } else {
+          setTrips(prev => [...prev, ...newTrips]);
+        }
+
+        setHasMore(newTrips.length === 10);
+        console.log('✅ Loaded', newTrips.length, 'posts');
+      }
+    } catch (error) {
+      console.error('❌ Error loading posts:', error);
+      // Show fallback data on error for first load
+      if (pageNum === 1 && !shouldRefresh) {
+        setTrips(getFallbackTrips());
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const onRefresh = () => {
+    loadPosts(1, true);
+  };
+
+  const loadMore = () => {
+    if (!loading && hasMore) {
+      loadPosts(page + 1);
+      setPage(prev => prev + 1);
+    }
+  };
+
+  // Fallback data if API fails
+  const getFallbackTrips = () => [
+    {
+      id: 'fallback-1',
+      videoUrl: 'https://www.pexels.com/download/video/5896379/',
+      thumbnail: 'https://images.pexels.com/photos/1450360/pexels-photo-1450360.jpeg',
+      title: 'Hidden Paradise in the Mountains',
+      location: 'Pokhara',
+      country: 'Nepal',
+      days: 3,
+      cost: 12500,
+      currency: 'NPR',
+      author: {
+        name: 'Sarah Chen',
+        avatar: 'https://i.pravatar.cc/150?img=1',
+      },
+      likes: 1240,
+      comments: 89,
+      saved: false,
+      isAISuggestion: false,
+    },
+  ];
+
+  const firstTripId = trips[0]?.id;
   const getAnimValue = (tripId, type) => {
     const refs = type === 'like' ? likeAnimRefs : saveAnimRefs;
     if (!refs.current[tripId]) {
@@ -152,87 +256,6 @@ const HomeScreen = () => {
     { id: 's5', user: 'Lisa', avatar: 'https://i.pravatar.cc/150?img=9', hasNew: false },
   ];
 
-  const trips = [
-    {
-      id: 1,
-      videoUrl: 'https://www.pexels.com/download/video/5896379/',
-      thumbnail: 'https://images.pexels.com/photos/1450360/pexels-photo-1450360.jpeg',
-      title: 'Hidden Paradise in the Mountains',
-      location: 'Pokhara',
-      country: 'Nepal',
-      days: 3,
-      cost: 12500,
-      currency: 'NPR',
-      author: {
-        name: 'Sarah Chen',
-        avatar: 'https://i.pravatar.cc/150?img=1',
-      },
-      likes: 1240,
-      comments: 89,
-      saved: false,
-      isAISuggestion: false,
-    },
-    {
-      id: 2,
-      videoUrl: 'https://www.pexels.com/download/video/8859849/',
-      thumbnail: 'https://images.pexels.com/photos/1563356/pexels-photo-1563356.jpeg',
-      title: 'Cultural Heritage Tour',
-      location: 'Kathmandu',
-      country: 'Nepal',
-      days: 5,
-      cost: 25000,
-      currency: 'NPR',
-      author: {
-        name: 'Mike Johnson',
-        avatar: 'https://i.pravatar.cc/150?img=12',
-      },
-      likes: 2100,
-      comments: 156,
-      saved: true,
-      isAISuggestion: false,
-    },
-    {
-      id: 'ai-1',
-      videoUrl:'https://www.pexels.com/download/video/4937376/',
-      thumbnail: 'https://images.pexels.com/photos/3408354/pexels-photo-3408354.jpeg',
-      title: 'Perfect for Your Budget',
-      location: 'Nagarkot',
-      country: 'Nepal',
-      days: 2,
-      cost: 7500,
-      currency: 'NPR',
-      author: {
-        name: 'TripMate AI',
-        avatar: null,
-      },
-      likes: 890,
-      comments: 45,
-      saved: false,
-      isAISuggestion: true,
-    },
-    {
-      id: 3,
-      videoUrl: 'https://www.pexels.com/download/video/8233057/',
-      thumbnail: 'https://images.pexels.com/photos/1032650/pexels-photo-1032650.jpeg',
-      title: 'Wildlife Adventure Awaits',
-      location: 'Chitwan',
-      country: 'Nepal',
-      days: 2,
-      cost: 8500,
-      currency: 'NPR',
-      author: {
-        name: 'Emma Wilson',
-        avatar: 'https://i.pravatar.cc/150?img=5',
-      },
-      likes: 890,
-      comments: 67,
-      saved: false,
-      isAISuggestion: false,
-    },
-  ];
-
-  const firstTripId = trips[0]?.id;
-
   // Get or create overlay animation value
   const getOverlayAnimValue = (tripId) => {
     if (!overlayAnimRefs.current[tripId]) {
@@ -246,10 +269,13 @@ const HomeScreen = () => {
   // Initialize overlays - first video visible, others hidden
   useEffect(() => {
     const initialOverlays = {};
+    const initialMuted = {};
     trips.forEach((trip, index) => {
       initialOverlays[trip.id] = index === 0; // Only first video visible
+      initialMuted[trip.id] = false; // Start with sound ON for all videos
     });
     setShowOverlays(initialOverlays);
+    setMutedVideos(initialMuted);
 
     // Hide first video overlay after 3 seconds
     const timer = setTimeout(() => {
@@ -277,7 +303,7 @@ const HomeScreen = () => {
     return () => {
       clearTimeout(timer);
     };
-  }, []); // Run once on mount
+  }, [trips]); // Re-run when trips change
 
   const handleTripPress = (trip) => {
     navigation.navigate('PostDetails', { tripId: trip.id });
@@ -407,6 +433,14 @@ const HomeScreen = () => {
     navigation.navigate('ExploreTab');
   };
 
+  // Toggle mute/unmute for video
+  const toggleMute = (tripId) => {
+    setMutedVideos(prev => ({
+      ...prev,
+      [tripId]: !prev[tripId]
+    }));
+  };
+
   // Single tap on video - could add play/pause toggle in future
   const handleVideoTap = (tripId) => {
     console.log(`Now playing: ${trips.find(t => t.id === tripId)?.location}`);
@@ -449,6 +483,13 @@ const HomeScreen = () => {
     if (viewableItems.length > 0) {
       const visibleIndex = viewableItems[0].index;
       setCurrentVideoIndex(visibleIndex);
+      
+      // Optional: Mute all other videos when switching
+      const visibleTripId = trips[visibleIndex]?.id;
+      if (visibleTripId) {
+        // Keep the mute state of current video, but we could auto-mute others if needed
+        console.log('📺 Now viewing:', trips[visibleIndex]?.title);
+      }
     }
   }).current;
 
@@ -512,7 +553,7 @@ const HomeScreen = () => {
                 activeOpacity={1}
                 onPress={() => handleDoubleTap(trip.id)}
               >
-                {/* Video Player - Auto-play on Mute */}
+                {/* Video Player - Auto-play with sound */}
                 <Video
                   ref={(ref) => {
                     if (ref) videoRefs.current[trip.id] = ref;
@@ -522,7 +563,8 @@ const HomeScreen = () => {
                   resizeMode={ResizeMode.COVER}
                   shouldPlay={index === currentVideoIndex}
                   isLooping={true}
-                  isMuted={true}
+                  isMuted={mutedVideos[trip.id] !== false} // false = unmuted (sound ON), true = muted
+                  volume={mutedVideos[trip.id] === false ? 1.0 : 0.0}
                   onPlaybackStatusUpdate={(status) => {
                     if (status.isLoaded && status.isPlaying) {
                       setPlayingVideos(prev => ({ ...prev, [trip.id]: status.isPlaying }));
@@ -636,6 +678,21 @@ const HomeScreen = () => {
 
                   <TouchableOpacity
                     style={styles.actionButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      toggleMute(trip.id);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons 
+                      name={mutedVideos[trip.id] === false ? "volume-high" : "volume-mute"} 
+                      size={20} 
+                      color="#FFFFFF" 
+                    />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.actionButton}
                     onPress={(e) => e.stopPropagation()}
                     activeOpacity={0.7}
                   >
@@ -741,24 +798,54 @@ const HomeScreen = () => {
       </View>
 
       {/* TikTok-Style Video Feed */}
-      <FlatList
-        ref={flatListRef}
-        data={trips}
-        renderItem={renderVideoItem}
-        keyExtractor={(item) => item.id.toString()}
-        pagingEnabled
-        showsVerticalScrollIndicator={false}
-        snapToInterval={CARD_HEIGHT}
-        snapToAlignment="start"
-        decelerationRate="fast"
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        getItemLayout={(data, index) => ({
-          length: CARD_HEIGHT,
-          offset: CARD_HEIGHT * index,
-          index,
-        })}
-      />
+      {loading && trips.length === 0 ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#2679FF" />
+          <Text style={styles.loadingText}>Loading amazing trips...</Text>
+        </View>
+      ) : trips.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="earth-outline" size={64} color="rgba(255,255,255,0.3)" />
+          <Text style={styles.emptyText}>No trips yet</Text>
+          <Text style={styles.emptySubtext}>Be the first to share your adventure!</Text>
+        </View>
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={trips}
+          renderItem={renderVideoItem}
+          keyExtractor={(item) => item.id.toString()}
+          pagingEnabled
+          showsVerticalScrollIndicator={false}
+          snapToInterval={CARD_HEIGHT}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          getItemLayout={(data, index) => ({
+            length: CARD_HEIGHT,
+            offset: CARD_HEIGHT * index,
+            index,
+          })}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#FFFFFF"
+              colors={['#2679FF']}
+            />
+          }
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.5}
+          ListFooterComponent={
+            loading && trips.length > 0 ? (
+              <View style={styles.footerLoader}>
+                <ActivityIndicator size="small" color="#2679FF" />
+              </View>
+            ) : null
+          }
+        />
+      )}
     </View>
   );
 };
@@ -773,6 +860,43 @@ const formatNumber = (num) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+  },
+  loadingText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.medium,
+    marginTop: SPACING.lg,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+    paddingHorizontal: SPACING.xl,
+  },
+  emptyText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.xl,
+    fontWeight: FONT_WEIGHTS.bold,
+    marginTop: SPACING.lg,
+  },
+  emptySubtext: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: FONT_SIZES.md,
+    marginTop: SPACING.sm,
+    textAlign: 'center',
+  },
+  footerLoader: {
+    height: CARD_HEIGHT,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
   },
   videoItemContainer: {
     height: CARD_HEIGHT,
