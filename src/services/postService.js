@@ -8,18 +8,19 @@ export const pickMedia = async (type = 'video') => {
   try {
     console.log('🎬 PICKING MEDIA:', type);
 
-    // Request permissions
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
+    // Request both permissions upfront
+    const { status: imagePickerStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    const { status: mediaLibraryStatus } = await MediaLibrary.requestPermissionsAsync();
+    
+    if (imagePickerStatus !== 'granted') {
       throw new Error('Media library permission denied');
     }
 
     // Pick media
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: type === 'video' ? ['videos'] : type === 'image' ? ['images'] : ['videos', 'images'],
-      allowsEditing: true,
-      aspect: type === 'video' ? [16, 9] : [4, 3],
-      quality: 0.8,
+      allowsEditing: false, // Don't edit to preserve metadata
+      quality: 1, // Maximum quality to preserve metadata
       videoMaxDuration: 60, // 60 seconds max
       exif: true, // Get EXIF data
     });
@@ -38,6 +39,7 @@ export const pickMedia = async (type = 'video') => {
       duration: asset.duration,
       fileSize: asset.fileSize,
       hasExif: !!asset.exif,
+      assetId: asset.assetId, // Check if assetId is available
     });
 
     // Extract metadata from EXIF
@@ -47,7 +49,7 @@ export const pickMedia = async (type = 'video') => {
       duration: asset.duration,
     };
 
-    // Try to get location from EXIF if available
+    // Try to get location from EXIF if available (works for images)
     let location = null;
     if (asset.exif) {
       metadata.exif = {
@@ -83,24 +85,131 @@ export const pickMedia = async (type = 'video') => {
           console.log('⚠️ Invalid EXIF GPS coordinates:', { lat, lon });
         }
       }
+    } else {
+      console.log('ℹ️ No EXIF data (normal for videos)');
     }
 
-    // If no EXIF location, try to get from Media Library asset info
-    if (!location && asset.uri.startsWith('file://')) {
+    // Try to get from Media Library asset info (CRITICAL for videos)
+    if (!location && mediaLibraryStatus === 'granted') {
       try {
-        const mediaAsset = await MediaLibrary.getAssetInfoAsync(asset.uri.replace('file://', ''));
-        if (mediaAsset && mediaAsset.location) {
-          location = {
-            latitude: mediaAsset.location.latitude,
-            longitude: mediaAsset.location.longitude,
-            fromMediaLibrary: true,
-          };
-          console.log('📍 LOCATION FROM MEDIA LIBRARY:', location);
-        } else {
-          console.log('⚠️ Media library info available but no location data');
+        console.log('🔍 TRYING MEDIA LIBRARY for location...');
+        
+        // Strategy 1: Use assetId if available (iOS 14+)
+        if (asset.assetId) {
+          console.log('✅ Using assetId:', asset.assetId);
+          try {
+            const mediaAsset = await MediaLibrary.getAssetInfoAsync(asset.assetId);
+            
+            console.log('📦 MEDIA LIBRARY ASSET INFO (by ID):', {
+              id: mediaAsset.id,
+              filename: mediaAsset.filename,
+              hasLocation: !!mediaAsset.location,
+              location: mediaAsset.location,
+            });
+            
+            if (mediaAsset && mediaAsset.location) {
+              // MediaLibrary returns coordinates as strings, convert to numbers
+              const lat = Number(mediaAsset.location.latitude);
+              const lon = Number(mediaAsset.location.longitude);
+              
+              if (!isNaN(lat) && !isNaN(lon)) {
+                location = {
+                  latitude: lat,
+                  longitude: lon,
+                  fromMediaLibrary: true,
+                };
+                console.log('📍 LOCATION FROM MEDIA LIBRARY (by ID):', location);
+              } else {
+                console.log('⚠️ Invalid coordinates from MediaLibrary (by ID):', { lat, lon });
+              }
+            }
+          } catch (idError) {
+            console.log('⚠️ Could not get asset by ID:', idError.message);
+          }
+        }
+        
+        // Strategy 2: Search recent assets if assetId not available or failed
+        if (!location) {
+          console.log('🔍 SEARCHING recent assets...');
+          
+          const assetsPage = await MediaLibrary.getAssetsAsync({
+            first: 50, // Increased from 20
+            sortBy: MediaLibrary.SortBy.creationTime,
+            mediaType: asset.type === 'video' ? MediaLibrary.MediaType.video : MediaLibrary.MediaType.photo,
+          });
+          
+          console.log(`📋 Found ${assetsPage.assets.length} recent ${asset.type}s`);
+          
+          // Try multiple matching strategies
+          let matchingAsset = null;
+          
+          // Try exact URI match first
+          matchingAsset = assetsPage.assets.find(a => a.uri === asset.uri);
+          
+          // Try filename match
+          if (!matchingAsset) {
+            const filename = asset.uri.split('/').pop().split('?')[0]; // Remove query params
+            console.log('🔍 Trying filename match:', filename);
+            matchingAsset = assetsPage.assets.find(a => a.filename === filename);
+          }
+          
+          // Try original filename from URI (without extension changes)
+          if (!matchingAsset) {
+            const cleanUri = asset.uri.split('/').pop().split('.')[0];
+            matchingAsset = assetsPage.assets.find(a => 
+              a.filename.includes(cleanUri) || a.uri.includes(cleanUri)
+            );
+          }
+          
+          // Use most recent as last resort (risky but better than nothing)
+          if (!matchingAsset && assetsPage.assets.length > 0) {
+            console.log('⚠️ Using most recent asset as fallback');
+            matchingAsset = assetsPage.assets[0];
+          }
+          
+          if (matchingAsset) {
+            console.log('✅ FOUND MATCHING ASSET:', {
+              id: matchingAsset.id,
+              filename: matchingAsset.filename,
+              uri: matchingAsset.uri,
+            });
+            
+            const mediaAsset = await MediaLibrary.getAssetInfoAsync(matchingAsset.id);
+            
+            console.log('📦 MEDIA LIBRARY ASSET INFO:', {
+              id: mediaAsset.id,
+              filename: mediaAsset.filename,
+              mediaType: mediaAsset.mediaType,
+              hasLocation: !!mediaAsset.location,
+              location: mediaAsset.location,
+            });
+            
+            if (mediaAsset && mediaAsset.location) {
+              // MediaLibrary returns coordinates as strings, convert to numbers
+              const lat = Number(mediaAsset.location.latitude);
+              const lon = Number(mediaAsset.location.longitude);
+              
+              if (!isNaN(lat) && !isNaN(lon)) {
+                location = {
+                  latitude: lat,
+                  longitude: lon,
+                  fromMediaLibrary: true,
+                };
+                console.log('📍 LOCATION FROM MEDIA LIBRARY:', location);
+              } else {
+                console.log('⚠️ Invalid coordinates from MediaLibrary:', { lat, lon });
+              }
+            } else {
+              console.log('⚠️ Media library asset has no location data');
+              console.log('💡 TIP: Enable location services when recording videos');
+            }
+          } else {
+            console.log('⚠️ Could not find matching asset in media library');
+          }
         }
       } catch (mediaLibError) {
-        console.log('⚠️ Could not get media library info:', mediaLibError.message);
+        console.log('⚠️ MediaLibrary error:', mediaLibError.message);
+        console.error(mediaLibError);
       }
     }
 
@@ -122,13 +231,24 @@ export const pickMedia = async (type = 'video') => {
       }
     }
 
-    // Reverse geocode to get address (only if coordinates are valid)
+    // Reverse geocode to get address (only if coordinates are valid numbers)
     if (location && 
         location.latitude !== null && 
         location.longitude !== null &&
+        typeof location.latitude === 'number' &&
+        typeof location.longitude === 'number' &&
         !isNaN(location.latitude) &&
         !isNaN(location.longitude)) {
       try {
+        console.log('🌍 REVERSE GEOCODING:', { 
+          lat: location.latitude, 
+          lon: location.longitude,
+          types: {
+            lat: typeof location.latitude,
+            lon: typeof location.longitude,
+          }
+        });
+        
         const addresses = await Location.reverseGeocodeAsync({
           latitude: location.latitude,
           longitude: location.longitude,
@@ -147,6 +267,24 @@ export const pickMedia = async (type = 'video') => {
       } catch (geocodeError) {
         console.log('⚠️ Could not reverse geocode:', geocodeError.message);
       }
+    } else if (location) {
+      console.log('⚠️ Location coordinates are not valid numbers:', {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        latType: typeof location.latitude,
+        lonType: typeof location.longitude,
+      });
+    }
+
+    // Final validation before returning
+    if (location) {
+      console.log('✅ FINAL LOCATION:', {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        latType: typeof location.latitude,
+        lonType: typeof location.longitude,
+        hasAddress: !!location.address,
+      });
     }
 
     return {
