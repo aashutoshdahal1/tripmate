@@ -23,6 +23,7 @@ import * as Location from 'expo-location';
 import { useTheme } from '../contexts/ThemeContext';
 import { BORDER_RADIUS, SPACING, FONT_SIZES, FONT_WEIGHTS } from '../constants/colors';
 import { getPostById } from '../services/postService';
+import { generateAIItinerary } from '../services/aiService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -45,6 +46,9 @@ const PostDetailsScreen = () => {
   const [userLocation, setUserLocation] = useState(null);
   const [distance, setDistance] = useState(null);
   const [loadingLocation, setLoadingLocation] = useState(false);
+  const [generatedItinerary, setGeneratedItinerary] = useState(null);
+  const [generatingItinerary, setGeneratingItinerary] = useState(false);
+  const [showGenerated, setShowGenerated] = useState(false);
   
   const scrollY = useRef(new Animated.Value(0)).current;
   const saveAnim = useRef(new Animated.Value(1)).current;
@@ -61,6 +65,26 @@ const PostDetailsScreen = () => {
       setLoading(false);
     }
   }, [id]);
+
+  // Auto-generate itinerary when user opens itinerary tab without existing itinerary
+  useEffect(() => {
+    if (
+      activeTab === 'itinerary' &&
+      post &&
+      userLocation &&
+      distance !== null &&
+      !post.tripDetails?.itinerary?.length &&
+      !generatedItinerary &&
+      !generatingItinerary
+    ) {
+      // Auto-trigger generation after a short delay
+      const timer = setTimeout(() => {
+        console.log('🤖 Auto-triggering itinerary generation...');
+        generateSmartItinerary();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, post, userLocation, distance, generatedItinerary]);
 
   const fetchPostData = async () => {
     try {
@@ -263,6 +287,95 @@ const PostDetailsScreen = () => {
       }),
     ]).start();
     setIsLiked(!isLiked);
+  };
+
+  const generateSmartItinerary = async () => {
+    if (!userLocation || !post?.location?.coordinates || !distance) {
+      Alert.alert(
+        'Location Required',
+        'Please enable location services to generate a personalized itinerary.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    try {
+      setGeneratingItinerary(true);
+      console.log('🤖 Calling Gemini AI to generate itinerary...');
+      console.log('📍 From:', userLocation);
+      console.log('📍 To:', post.location.coordinates);
+      console.log('📏 Distance:', distance, 'km');
+      console.log('🎯 Interests:', post.tripDetails?.interests);
+      console.log('💰 Budget:', post.tripDetails?.budget?.amount);
+
+      // Prepare data for AI API
+      const requestData = {
+        userLocation: {
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+        },
+        destinationLocation: {
+          latitude: post.location.coordinates.latitude,
+          longitude: post.location.coordinates.longitude,
+        },
+        distance: distance,
+        destinationName: post.location.name || 'destination',
+        destinationAddress: post.location.address || '',
+        duration: post.tripDetails?.duration || null,
+        budget: post.tripDetails?.budget?.amount || null,
+        interests: post.tripDetails?.interests || [],
+        tripType: post.tripDetails?.tripType || 'leisure',
+      };
+
+      // Call AI API
+      const response = await generateAIItinerary(requestData);
+
+      if (!response.success) {
+        throw new Error(response.message || 'Failed to generate itinerary');
+      }
+
+      const aiData = response.data;
+      
+      console.log('✅ AI itinerary received!');
+      console.log('📊 Duration:', aiData.duration, 'days');
+      console.log('💰 Total budget:', aiData.totalBudget);
+      console.log('📝 Days:', aiData.itinerary.length);
+
+      // Transform AI response to match our format
+      const transformedItinerary = aiData.itinerary.map(day => ({
+        day: day.day,
+        title: day.title,
+        activities: day.activities,
+        budget: day.budget,
+        generated: true,
+        aiGenerated: true,
+      }));
+
+      setGeneratedItinerary(transformedItinerary);
+      setShowGenerated(true);
+      
+      Alert.alert(
+        '✨ AI Itinerary Generated!',
+        `Gemini AI created a ${aiData.duration}-day personalized journey!\n\n` +
+        `🎯 Interests: ${requestData.interests.length > 0 ? requestData.interests.join(', ') : 'general exploration'}\n` +
+        `💰 Budget: NPR ${aiData.totalBudget.toLocaleString()}\n` +
+        `📏 Distance: ${distance.toFixed(0)} km\n\n` +
+        (aiData.tips && aiData.tips.length > 0 ? `💡 Tips included!` : ''),
+        [{ text: 'View Itinerary' }]
+      );
+    } catch (error) {
+      console.error('❌ Error generating AI itinerary:', error);
+      Alert.alert(
+        'Generation Failed',
+        error.message || 'Failed to generate itinerary. Please try again.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Retry', onPress: generateSmartItinerary }
+        ]
+      );
+    } finally {
+      setGeneratingItinerary(false);
+    }
   };
 
   // Parallax effect for header
@@ -851,43 +964,158 @@ const PostDetailsScreen = () => {
 
           {activeTab === 'itinerary' && (
             <View style={styles.tabContent}>
-              {post.tripDetails?.itinerary && post.tripDetails.itinerary.length > 0 ? (
-                post.tripDetails.itinerary.map((day, idx) => (
-                  <View key={idx} style={styles.dayContainer}>
-                    {/* Day Header */}
-                    <View style={[styles.dayHeader, { backgroundColor: colors.card }, shadows.sm]}>
-                      <View style={[styles.dayBadge, { backgroundColor: colors.primary }]}>
-                        <Text style={styles.dayBadgeText}>Day {day.day}</Text>
-                      </View>
-                      <Text style={[styles.dayTitle, { color: colors.text }]}>
-                        {day.title || `Day ${day.day} Activities`}
-                      </Text>
-                    </View>
+              {/* AI Generate Button - Always show */}
+              <TouchableOpacity
+                style={[styles.generateButton, { backgroundColor: colors.accent }, shadows.md]}
+                onPress={generateSmartItinerary}
+                disabled={generatingItinerary || !userLocation}
+              >
+                {generatingItinerary ? (
+                  <>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={styles.generateButtonText}>Generating Your Route...</Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="sparkles" size={20} color="#FFFFFF" />
+                    <Text style={styles.generateButtonText}>
+                      {post.tripDetails?.itinerary && post.tripDetails.itinerary.length > 0
+                        ? '✨ Generate Route-Based Itinerary'
+                        : '🤖 Auto-Generate Smart Itinerary'}
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
 
-                    {/* Activities */}
-                    <View style={[styles.activityItem, { backgroundColor: colors.card }, shadows.sm]}>
-                      <Text style={[styles.activityName, { color: colors.text }]}>
-                        {day.activities || 'No activities listed'}
-                      </Text>
-                      {day.budget > 0 && (
-                        <View style={styles.locationRow}>
-                          <Ionicons name="wallet-outline" size={14} color={colors.textSecondary} />
-                          <Text style={[styles.activityLocation, { color: colors.textSecondary }]}>
-                            Budget: NPR {day.budget.toLocaleString()}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                ))
-              ) : (
-                <View style={styles.emptyVlog}>
-                  <Ionicons name="map-outline" size={64} color={colors.textSecondary} />
-                  <Text style={[styles.emptyVlogText, { color: colors.textSecondary }]}>
-                    No itinerary available for this trip.
+              {!userLocation && !loadingLocation && (
+                <View style={[styles.infoBox, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '30' }]}>
+                  <Ionicons name="information-circle" size={20} color={colors.primary} />
+                  <Text style={[styles.infoBoxText, { color: colors.primary }]}>
+                    Enable location to generate a personalized itinerary from your current location to the destination
                   </Text>
                 </View>
               )}
+
+              {/* Toggle between original and generated */}
+              {generatedItinerary && post.tripDetails?.itinerary && post.tripDetails.itinerary.length > 0 && (
+                <View style={styles.toggleContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.toggleButton,
+                      !showGenerated && { backgroundColor: colors.primary },
+                      showGenerated && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }
+                    ]}
+                    onPress={() => setShowGenerated(false)}
+                  >
+                    <Text style={[
+                      styles.toggleButtonText,
+                      !showGenerated ? { color: '#FFFFFF' } : { color: colors.text }
+                    ]}>
+                      Original Plan
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.toggleButton,
+                      showGenerated && { backgroundColor: colors.accent },
+                      !showGenerated && { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border }
+                    ]}
+                    onPress={() => setShowGenerated(true)}
+                  >
+                    <Ionicons 
+                      name="sparkles" 
+                      size={16} 
+                      color={showGenerated ? '#FFFFFF' : colors.text} 
+                    />
+                    <Text style={[
+                      styles.toggleButtonText,
+                      showGenerated ? { color: '#FFFFFF' } : { color: colors.text }
+                    ]}>
+                      AI Generated
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Display itinerary */}
+              {(() => {
+                const itineraryToShow = showGenerated && generatedItinerary 
+                  ? generatedItinerary 
+                  : post.tripDetails?.itinerary;
+
+                if (itineraryToShow && itineraryToShow.length > 0) {
+                  return (
+                    <>
+                      {showGenerated && generatedItinerary && (
+                        <View style={[styles.aiLabel, { backgroundColor: colors.accent + '20' }]}>
+                          <Ionicons name="sparkles" size={16} color={colors.accent} />
+                          <Text style={[styles.aiLabelText, { color: colors.accent }]}>
+                            AI-generated personalized itinerary based on your location ({distance?.toFixed(0)} km away)
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {itineraryToShow.map((day, idx) => (
+                        <View key={idx} style={styles.dayContainer}>
+                          {/* Day Header */}
+                          <View style={[styles.dayHeader, { backgroundColor: colors.card }, shadows.sm]}>
+                            <View style={[styles.dayBadge, { backgroundColor: showGenerated ? colors.accent : colors.primary }]}>
+                              <Text style={styles.dayBadgeText}>Day {day.day}</Text>
+                            </View>
+                            <Text style={[styles.dayTitle, { color: colors.text }]}>
+                              {day.title || `Day ${day.day} Activities`}
+                            </Text>
+                          </View>
+
+                          {/* Activities */}
+                          <View style={[styles.activityItem, { backgroundColor: colors.card }, shadows.sm]}>
+                            <Text style={[styles.activityName, { color: colors.text }]}>
+                              {day.activities || 'No activities listed'}
+                            </Text>
+                            {day.budget > 0 && (
+                              <View style={styles.locationRow}>
+                                <Ionicons name="wallet-outline" size={14} color={colors.textSecondary} />
+                                <Text style={[styles.activityLocation, { color: colors.textSecondary }]}>
+                                  Budget: NPR {day.budget.toLocaleString()}
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                        </View>
+                      ))}
+
+                      {/* Total Budget Summary for Generated */}
+                      {showGenerated && generatedItinerary && (
+                        <View style={[styles.budgetSummary, { backgroundColor: colors.accent + '15', borderColor: colors.accent + '30' }]}>
+                          <View style={styles.budgetSummaryRow}>
+                            <Text style={[styles.budgetSummaryLabel, { color: colors.text }]}>
+                              Estimated Total Budget
+                            </Text>
+                            <Text style={[styles.budgetSummaryValue, { color: colors.accent }]}>
+                              NPR {generatedItinerary.reduce((sum, day) => sum + (day.budget || 0), 0).toLocaleString()}
+                            </Text>
+                          </View>
+                          <Text style={[styles.budgetSummaryNote, { color: colors.textSecondary }]}>
+                            Includes travel, accommodation, food, and activities
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  );
+                } else if (!generatedItinerary) {
+                  return (
+                    <View style={styles.emptyVlog}>
+                      <Ionicons name="map-outline" size={64} color={colors.textSecondary} />
+                      <Text style={[styles.emptyVlogText, { color: colors.textSecondary }]}>
+                        No itinerary available.
+                      </Text>
+                      <Text style={[styles.emptyVlogSubtext, { color: colors.textSecondary }]}>
+                        Generate a smart itinerary based on your location
+                      </Text>
+                    </View>
+                  );
+                }
+              })()}
             </View>
           )}
 
@@ -1590,6 +1818,12 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     textAlign: 'center',
   },
+  emptyVlogSubtext: {
+    fontSize: FONT_SIZES.sm,
+    marginTop: SPACING.xs,
+    textAlign: 'center',
+    opacity: 0.7,
+  },
   videoLoadingContainer: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
@@ -1607,6 +1841,91 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
+  },
+  // AI Itinerary Generation
+  generateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: BORDER_RADIUS.lg,
+    marginBottom: SPACING.lg,
+  },
+  generateButtonText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.sm,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    marginBottom: SPACING.lg,
+  },
+  infoBoxText: {
+    flex: 1,
+    fontSize: FONT_SIZES.sm,
+    lineHeight: 20,
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  toggleButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  toggleButtonText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  aiLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.lg,
+  },
+  aiLabelText: {
+    flex: 1,
+    fontSize: FONT_SIZES.sm,
+    fontWeight: FONT_WEIGHTS.medium,
+  },
+  budgetSummary: {
+    padding: SPACING.lg,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    marginTop: SPACING.lg,
+  },
+  budgetSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  budgetSummaryLabel: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  budgetSummaryValue: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: FONT_WEIGHTS.bold,
+  },
+  budgetSummaryNote: {
+    fontSize: FONT_SIZES.xs,
+    marginTop: SPACING.xs,
   },
 });
 
