@@ -25,7 +25,6 @@ const PostDetailsScreen = () => {
   const [activeTab, setActiveTab] = useState('vlog');
   const [isSaved, setIsSaved] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
-  const scrollY = useRef(new Animated.Value(0)).current;
   const saveAnim = useRef(new Animated.Value(1)).current;
   const likeAnim = useRef(new Animated.Value(1)).current;
 
@@ -157,25 +156,6 @@ const PostDetailsScreen = () => {
     ]).start();
     setIsLiked(!isLiked);
   };
-
-  // Parallax effect for header
-  const headerOpacity = scrollY.interpolate({
-    inputRange: [0, 150],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-
-  const imageScale = scrollY.interpolate({
-    inputRange: [-100, 0],
-    outputRange: [1.3, 1],
-    extrapolate: 'clamp',
-  });
-
-  const imageTranslateY = scrollY.interpolate({
-    inputRange: [0, 300],
-    outputRange: [0, -50],
-    extrapolate: 'clamp',
-  });
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -513,6 +493,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     width: width,
     height: width * 0.75,
+    overflow: 'hidden',
   },
   mainImage: {
     width: '100%',

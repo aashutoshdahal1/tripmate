@@ -383,10 +383,18 @@ export const uploadMediaToCloudinary = async (mediaUri, type = 'video', onProgre
             publicId: response.public_id,
             duration: response.duration,
           });
+          
+          // Generate thumbnail URL for videos (first frame at 0 seconds)
+          let thumbnailUrl = response.secure_url;
+          if (type === 'video' && response.public_id) {
+            // For videos, create a thumbnail URL pointing to the first frame
+            thumbnailUrl = `https://res.cloudinary.com/${CLOUDINARY_CONFIG.cloudName}/video/upload/so_0,w_400,h_600,c_fill/${response.public_id}.jpg`;
+          }
+          
           resolve({
             url: response.secure_url,
             publicId: response.public_id,
-            thumbnail: response.thumbnail_url || response.secure_url,
+            thumbnail: thumbnailUrl,
             duration: response.duration,
             width: response.width,
             height: response.height,
@@ -416,6 +424,7 @@ export const uploadMediaToCloudinary = async (mediaUri, type = 'video', onProgre
 export const createPost = async (postData, token) => {
   try {
     console.log('📝 CREATING POST:', postData);
+    console.log('🔑 TOKEN:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN');
 
     const response = await fetch(getApiUrl('/posts'), {
       method: 'POST',
@@ -426,16 +435,27 @@ export const createPost = async (postData, token) => {
       body: JSON.stringify(postData),
     });
 
+    console.log('📡 RESPONSE STATUS:', response.status);
+    
     const data = await response.json();
+    console.log('📦 RESPONSE DATA:', data);
 
     if (!response.ok) {
-      throw new Error(data.message || 'Failed to create post');
+      console.error('❌ CREATE POST FAILED:', {
+        status: response.status,
+        statusText: response.statusText,
+        message: data.message,
+        error: data.error,
+      });
+      throw new Error(data.message || data.error || 'Failed to create post');
     }
 
     console.log('✅ POST CREATED:', data.data._id);
     return data.data;
   } catch (error) {
     console.error('❌ CREATE POST ERROR:', error);
+    console.error('❌ ERROR TYPE:', error.name);
+    console.error('❌ ERROR MESSAGE:', error.message);
     throw error;
   }
 };

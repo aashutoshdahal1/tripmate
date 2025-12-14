@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,88 +9,188 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  RefreshControl,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { getUserPosts } from '../services/postService';
 import { BORDER_RADIUS, SPACING, FONT_SIZES, FONT_WEIGHTS } from '../constants/colors';
 
 const { width } = Dimensions.get('window');
+const COLUMN_COUNT = 3;
+const ITEM_SPACING = 2;
+const ITEM_SIZE = (width - (COLUMN_COUNT + 1) * ITEM_SPACING) / COLUMN_COUNT;
 
 const ProfileScreen = () => {
   const navigation = useNavigation();
   const { colors, shadows } = useTheme();
-  const { user, loading, isAuthenticated } = useAuth();
-  const [activeTab, setActiveTab] = React.useState('trips');
+  const { user, token, loading, isAuthenticated } = useAuth();
+  const [activeTab, setActiveTab] = useState('trips');
+  const [userPosts, setUserPosts] = useState([]);
+  const [loadingPosts, setLoadingPosts] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
 
-  // Static data for trips (will be dynamic from API later)
+  // Fetch user posts
+  const fetchUserPosts = async (pageNum = 1, isRefresh = false) => {
+    // Support both 'id' and '_id' for user identifier
+    const userId = user?.id || user?._id;
+    
+    if (!userId || !token) {
+      console.log('⚠️ Cannot fetch posts - missing user ID or token');
+      return;
+    }
+    
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoadingPosts(true);
+      }
+
+      console.log('📥 Fetching posts for user:', userId, 'Page:', pageNum);
+      const response = await getUserPosts(userId, pageNum, 20);
+      
+      console.log('✅ Posts response:', response);
+      
+      if (response && response.data) {
+        console.log('📦 Posts data length:', response.data.length);
+        if (isRefresh) {
+          setUserPosts(response.data);
+        } else {
+          setUserPosts(prev => pageNum === 1 ? response.data : [...prev, ...response.data]);
+        }
+        setHasMore(response.data.length === 20);
+        setPage(pageNum);
+      } else {
+        console.log('⚠️ No data in response');
+      }
+    } catch (error) {
+      console.error('❌ Error fetching posts:', error);
+      console.error('❌ Error details:', error.message);
+    } finally {
+      setLoadingPosts(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Load posts on mount and when user changes
+  useEffect(() => {
+    const userId = user?.id || user?._id;
+    if (isAuthenticated && userId && token) {
+      fetchUserPosts(1);
+    }
+  }, [user?.id, user?._id, token, isAuthenticated]);
+
+  // Refresh posts when screen comes into focus (e.g., after creating a post)
+  useFocusEffect(
+    React.useCallback(() => {
+      const userId = user?.id || user?._id;
+      if (isAuthenticated && userId && token) {
+        console.log('🔄 ProfileScreen focused - refreshing posts');
+        fetchUserPosts(1, true);
+      }
+    }, [user?.id, user?._id, token, isAuthenticated])
+  );
+
+  // Refresh handler
+  const onRefresh = () => {
+    fetchUserPosts(1, true);
+  };
+
+  // Static data for tabs
   const tabs = [
     { id: 'trips', label: 'My Trips', icon: 'map' },
     { id: 'saved', label: 'Saved', icon: 'bookmark' },
     { id: 'drafts', label: 'Drafts', icon: 'document' },
   ];
 
-  const myTrips = [
-    { 
-      id: 1, 
-      location: 'Pokhara, Nepal', 
-      image: 'https://images.pexels.com/photos/1450360/pexels-photo-1450360.jpeg',
-      days: 3, 
-      likes: 1240,
-      date: 'Dec 2024',
-    },
-    { 
-      id: 2, 
-      location: 'Kathmandu, Nepal', 
-      image: 'https://images.pexels.com/photos/1562/italian-landscape-mountains-nature.jpg',
-      days: 5, 
-      likes: 890,
-      date: 'Nov 2024',
-    },
-    { 
-      id: 3, 
-      location: 'Chitwan, Nepal', 
-      image: 'https://images.pexels.com/photos/1287460/pexels-photo-1287460.jpeg',
-      days: 2, 
-      likes: 567,
-      date: 'Oct 2024',
-    },
-  ];
-
-  const renderTripItem = ({ item }) => (
-    <TouchableOpacity
-      style={[styles.tripCard, shadows.sm]}
-      onPress={() => navigation.navigate('PostDetails', { tripId: item.id })}
-      activeOpacity={0.9}
-    >
-      <Image source={{ uri: item.image }} style={styles.tripImage} />
-      <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.7)']}
-        style={styles.tripGradient}
+  // Render TikTok-style grid item with unique design
+  const renderGridItem = ({ item, index }) => {
+    const isVideo = item.media?.type === 'video';
+    // Use thumbnail for videos (first frame), regular URL for images
+    const mediaUrl = isVideo && item.media?.thumbnail ? item.media.thumbnail : item.media?.url;
+    
+    return (
+      <Pressable
+        key={item._id}
+        style={styles.gridItem}
+        onPress={() => navigation.navigate('PostDetails', { postId: item._id })}
       >
-        <View style={styles.tripCardContent}>
-          <Text style={styles.tripLocation} numberOfLines={1}>{item.location}</Text>
-          <View style={styles.tripCardMeta}>
-            <View style={styles.tripMetaItem}>
-              <Ionicons name="calendar-outline" size={14} color="#FFFFFF" />
-              <Text style={styles.tripMetaText}>{item.days} days</Text>
-            </View>
-            <View style={styles.tripMetaItem}>
-              <Ionicons name="time-outline" size={14} color="#FFFFFF" />
-              <Text style={styles.tripMetaText}>{item.date}</Text>
-            </View>
+        {/* Media Thumbnail */}
+        <Image 
+          source={{ uri: mediaUrl }} 
+          style={styles.gridItemImage}
+          resizeMode="cover"
+        />
+        
+        {/* Gradient Overlay */}
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.6)']}
+          style={styles.gridItemGradient}
+        />
+
+        {/* Video Indicator */}
+        {isVideo && (
+          <View style={styles.videoIndicator}>
+            <Ionicons name="play" size={16} color="#FFFFFF" />
           </View>
-          <View style={styles.tripLikes}>
-            <Ionicons name="heart" size={14} color="#FF3B30" />
-            <Text style={styles.tripLikesText}>{item.likes}</Text>
+        )}
+
+        {/* Trip Type Badge */}
+        {item.tripDetails?.tripType && (
+          <View style={[
+            styles.tripTypeBadge,
+            { backgroundColor: item.tripDetails.tripType === 'short' ? 'rgba(38, 121, 255, 0.9)' : 'rgba(255, 59, 48, 0.9)' }
+          ]}>
+            <Text style={styles.tripTypeBadgeText}>
+              {item.tripDetails.tripType === 'short' ? 'Short' : 'Long'}
+            </Text>
           </View>
+        )}
+
+        {/* Location Pin */}
+        {item.location?.name && (
+          <View style={styles.gridItemLocation}>
+            <Ionicons name="location" size={12} color="#FFFFFF" />
+            <Text style={styles.gridItemLocationText} numberOfLines={1}>
+              {item.location.name}
+            </Text>
+          </View>
+        )}
+
+        {/* Stats Overlay */}
+        <View style={styles.gridItemStats}>
+          {/* Views/Likes */}
+          <View style={styles.gridItemStat}>
+            <Ionicons name="heart" size={14} color="#FFFFFF" />
+            <Text style={styles.gridItemStatText}>
+              {item.likes?.length || 0}
+            </Text>
+          </View>
+          
+          {/* Days Duration */}
+          {item.tripDetails?.days && (
+            <View style={styles.gridItemStat}>
+              <Ionicons name="calendar" size={14} color="#FFFFFF" />
+              <Text style={styles.gridItemStatText}>
+                {item.tripDetails.days}d
+              </Text>
+            </View>
+          )}
         </View>
-      </LinearGradient>
-    </TouchableOpacity>
-  );
+
+        {/* Shimmer effect on long press */}
+        <View style={styles.shimmerOverlay} pointerEvents="none" />
+      </Pressable>
+    );
+  };
 
   // Loading state
   if (loading) {
@@ -176,7 +276,12 @@ const ProfileScreen = () => {
   // Authenticated - show profile
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+        }
+      >
         {/* Cover Image & Header */}
         <View style={styles.coverContainer}>
           <Image 
@@ -252,7 +357,7 @@ const ProfileScreen = () => {
           <View style={styles.statsRow}>
             <TouchableOpacity style={styles.stat}>
               <Text style={[styles.statNumber, { color: colors.text }]}>
-                {user?.stats?.trips || 0}
+                {userPosts.length || 0}
               </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Trips</Text>
             </TouchableOpacity>
@@ -305,13 +410,37 @@ const ProfileScreen = () => {
         {/* Content */}
         <View style={styles.content}>
           {activeTab === 'trips' && (
-            <View style={styles.tripsGrid}>
-              {myTrips.map((item) => (
-                <View key={item.id}>
-                  {renderTripItem({ item })}
+            <>
+              {loadingPosts && userPosts.length === 0 ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                  <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+                    Loading trips...
+                  </Text>
                 </View>
-              ))}
-            </View>
+              ) : userPosts.length > 0 ? (
+                <View style={styles.gridContainer}>
+                  {userPosts.map((item, index) => renderGridItem({ item, index }))}
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <View style={[styles.emptyIcon, { backgroundColor: colors.primaryAlpha }]}>
+                    <Ionicons name="camera-outline" size={48} color={colors.primary} />
+                  </View>
+                  <Text style={[styles.emptyTitle, { color: colors.text }]}>No Trips Yet</Text>
+                  <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
+                    Start sharing your travel adventures
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.emptyButton, { backgroundColor: colors.primary }]}
+                    onPress={() => navigation.navigate('PlannerTab')}
+                  >
+                    <Ionicons name="add" size={20} color="#FFFFFF" />
+                    <Text style={styles.emptyButtonText}>Create First Trip</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
           )}
 
           {activeTab === 'saved' && (
@@ -571,13 +700,103 @@ const styles = StyleSheet.create({
   },
   // Content
   content: {
-    paddingHorizontal: SPACING.lg,
-    paddingTop: SPACING.lg,
+    paddingTop: SPACING.xs,
   },
+  // TikTok-Style Grid
+  gridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: ITEM_SPACING,
+    padding: ITEM_SPACING,
+  },
+  gridItem: {
+    width: ITEM_SIZE,
+    height: ITEM_SIZE * 1.4, // Taller aspect ratio like TikTok
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  gridItemImage: {
+    width: '100%',
+    height: '100%',
+  },
+  gridItemGradient: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: '50%',
+  },
+  videoIndicator: {
+    position: 'absolute',
+    top: SPACING.xs,
+    right: SPACING.xs,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tripTypeBadge: {
+    position: 'absolute',
+    top: SPACING.xs,
+    left: SPACING.xs,
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  tripTypeBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: FONT_WEIGHTS.bold,
+    textTransform: 'uppercase',
+  },
+  gridItemLocation: {
+    position: 'absolute',
+    bottom: SPACING.sm + 24,
+    left: SPACING.xs,
+    right: SPACING.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  gridItemLocationText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: FONT_WEIGHTS.semibold,
+    flex: 1,
+  },
+  gridItemStats: {
+    position: 'absolute',
+    bottom: SPACING.xs,
+    left: SPACING.xs,
+    right: SPACING.xs,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  gridItemStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  gridItemStatText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: FONT_WEIGHTS.bold,
+  },
+  shimmerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'transparent',
+  },
+  // Old trip card styles - kept for reference
   tripsGrid: {
     gap: SPACING.md,
   },
-  // Trip Card
   tripCard: {
     borderRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
@@ -636,15 +855,38 @@ const styles = StyleSheet.create({
   emptyState: {
     alignItems: 'center',
     paddingVertical: SPACING.xxxl,
+    paddingHorizontal: SPACING.xl,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.lg,
   },
   emptyTitle: {
     fontSize: FONT_SIZES.xl,
     fontWeight: FONT_WEIGHTS.bold,
-    marginTop: SPACING.lg,
     marginBottom: SPACING.xs,
   },
   emptySubtitle: {
     fontSize: FONT_SIZES.md,
+    textAlign: 'center',
+    marginBottom: SPACING.xl,
+  },
+  emptyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+  },
+  emptyButtonText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.semibold,
   },
 });
 

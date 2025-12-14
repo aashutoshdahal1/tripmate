@@ -47,12 +47,19 @@ const CreatePostScreen = () => {
       coordinates: null,
       address: '',
     },
+    tripType: '', // 'short' or 'long'
     days: '',
-    budget: '',
+    budgetBreakdown: {
+      accommodation: '',
+      food: '',
+      transport: '',
+      activities: '',
+    },
     interests: [],
   });
 
   const videoRef = useRef(null);
+  const scrollRef = useRef(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
@@ -112,8 +119,10 @@ const CreatePostScreen = () => {
           }));
         }
         
-        // Move to next step
-        setStep(2);
+        // Scroll to bottom to show Change/Continue buttons
+        setTimeout(() => {
+          scrollRef.current?.scrollToEnd({ animated: true });
+        }, 300);
       }
     } catch (error) {
       console.error('❌ SELECT MEDIA ERROR:', error);
@@ -161,6 +170,23 @@ const CreatePostScreen = () => {
   // Handle create post
   const handleCreatePost = async () => {
     try {
+      // Check if user is authenticated
+      if (!token) {
+        Alert.alert('Authentication Required', 'Please log in to create a post');
+        navigation.navigate('GetStarted');
+        return;
+      }
+
+      if (!user) {
+        Alert.alert('User Not Found', 'Please log in again');
+        navigation.navigate('GetStarted');
+        return;
+      }
+
+      console.log('🔐 USER INFO:', { userId: user._id, userName: user.name });
+      console.log('🔑 TOKEN EXISTS:', !!token);
+      console.log('🔑 TOKEN LENGTH:', token?.length);
+
       // Validation
       if (!formData.title.trim()) {
         Alert.alert('Missing Info', 'Please add a title for your trip');
@@ -177,6 +203,16 @@ const CreatePostScreen = () => {
         return;
       }
 
+      if (!formData.tripType) {
+        Alert.alert('Missing Info', 'Please select a trip type');
+        return;
+      }
+
+      if (!formData.budgetBreakdown.transport || parseInt(formData.budgetBreakdown.transport) < 1) {
+        Alert.alert('Missing Info', 'Please add at least the transport cost');
+        return;
+      }
+
       setUploading(true);
 
       // Upload media to Cloudinary first
@@ -187,6 +223,35 @@ const CreatePostScreen = () => {
       );
 
       // Prepare post data
+      const totalBudget = 
+        (parseInt(formData.budgetBreakdown.accommodation) || 0) +
+        (parseInt(formData.budgetBreakdown.food) || 0) +
+        (parseInt(formData.budgetBreakdown.transport) || 0) +
+        (parseInt(formData.budgetBreakdown.activities) || 0);
+
+      // Convert EXIF date format (2025:11:15 10:21:35) to ISO date
+      const convertExifDateToISO = (exifDate) => {
+        if (!exifDate) return new Date().toISOString();
+        
+        try {
+          // EXIF format: "2025:11:15 10:21:35"
+          // Replace colons in date with hyphens
+          const cleanDate = exifDate.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3');
+          const date = new Date(cleanDate);
+          
+          // Check if valid date
+          if (isNaN(date.getTime())) {
+            console.warn('⚠️ Invalid EXIF date, using current date');
+            return new Date().toISOString();
+          }
+          
+          return date.toISOString();
+        } catch (error) {
+          console.error('❌ Date conversion error:', error);
+          return new Date().toISOString();
+        }
+      };
+
       const postData = {
         title: formData.title,
         description: formData.description,
@@ -205,15 +270,22 @@ const CreatePostScreen = () => {
           height: cloudinaryResult.height,
         },
         metadata: {
-          capturedAt: mediaAsset.metadata?.exif?.dateTime || new Date().toISOString(),
+          capturedAt: convertExifDateToISO(mediaAsset.metadata?.exif?.dateTime),
           device: mediaAsset.metadata?.exif?.make,
           camera: mediaAsset.metadata?.exif?.model,
         },
         tripDetails: {
           duration: parseInt(formData.days),
-          budget: formData.budget ? {
-            amount: parseInt(formData.budget),
+          tripType: formData.tripType,
+          budget: totalBudget > 0 ? {
+            amount: totalBudget,
             currency: 'NPR',
+            breakdown: {
+              accommodation: parseInt(formData.budgetBreakdown.accommodation) || 0,
+              food: parseInt(formData.budgetBreakdown.food) || 0,
+              transport: parseInt(formData.budgetBreakdown.transport) || 0,
+              activities: parseInt(formData.budgetBreakdown.activities) || 0,
+            },
           } : undefined,
           interests: formData.interests,
         },
@@ -227,12 +299,71 @@ const CreatePostScreen = () => {
       console.log('✅ POST CREATED:', post._id);
 
       setUploading(false);
-      setStep(4); // Success step
+      
+      // Show success message
+      Alert.alert(
+        '🎉 Post Created!',
+        'Your trip has been shared with the TripMate community',
+        [
+          {
+            text: 'View Profile',
+            onPress: () => navigation.navigate('ProfileTab')
+          },
+          {
+            text: 'Create Another',
+            style: 'default'
+          }
+        ]
+      );
+      
+      // Reset form and go back to step 1
+      setMediaAsset(null);
+      setCloudinaryData(null);
+      setFormData({
+        title: '',
+        description: '',
+        location: {
+          name: '',
+          coordinates: null,
+          address: '',
+        },
+        tripType: '',
+        days: '',
+        budgetBreakdown: {
+          accommodation: '',
+          food: '',
+          transport: '',
+          activities: '',
+        },
+        interests: [],
+      });
+      setStep(1);
 
     } catch (error) {
       console.error('❌ CREATE POST ERROR:', error);
+      console.error('❌ ERROR DETAILS:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+      });
+      
       setUploading(false);
-      Alert.alert('Error', error.message || 'Failed to create post');
+      
+      // Handle specific error cases
+      if (error.message && error.message.includes('Not authorized')) {
+        Alert.alert(
+          'Authentication Error', 
+          'Your session has expired. Please log in again.',
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.navigate('GetStarted')
+            }
+          ]
+        );
+      } else {
+        Alert.alert('Error', error.message || 'Failed to create post. Please try again.');
+      }
     }
   };
 
@@ -247,17 +378,19 @@ const CreatePostScreen = () => {
         },
       ]}
     >
-      <View style={styles.stepHeader}>
-        <View style={[styles.stepIconContainer, { backgroundColor: colors.primaryAlpha }]}>
-          <Ionicons name="videocam" size={36} color={colors.primary} />
+      {!mediaAsset && (
+        <View style={styles.stepHeader}>
+          <View style={[styles.stepIconContainer, { backgroundColor: colors.primaryAlpha }]}>
+            <Ionicons name="videocam" size={36} color={colors.primary} />
+          </View>
+          <Text style={[styles.stepTitle, { color: colors.text }]}>
+            Upload Your Trip
+          </Text>
+          <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
+            Select a video or photo from your gallery
+          </Text>
         </View>
-        <Text style={[styles.stepTitle, { color: colors.text }]}>
-          Upload Your Trip
-        </Text>
-        <Text style={[styles.stepSubtitle, { color: colors.textSecondary }]}>
-          Select a video or photo from your gallery
-        </Text>
-      </View>
+      )}
 
       {!mediaAsset ? (
         <View>
@@ -288,7 +421,6 @@ const CreatePostScreen = () => {
                   Auto-detect location
                 </Text>
               </View>
->
             </View>
           </TouchableOpacity>
 
@@ -325,11 +457,15 @@ const CreatePostScreen = () => {
               source={{ uri: mediaAsset.uri }}
               style={styles.mediaPreview}
               useNativeControls
-              resizeMode="cover"
+              resizeMode="contain"
               isLooping
             />
           ) : (
-            <Image source={{ uri: mediaAsset.uri }} style={styles.mediaPreview} />
+            <Image 
+              source={{ uri: mediaAsset.uri }} 
+              style={styles.mediaPreview}
+              resizeMode="contain"
+            />
           )}
           
           {mediaAsset.location && (
@@ -519,38 +655,220 @@ const CreatePostScreen = () => {
           </View>
         </View>
 
-        {/* Days & Budget */}
-        <View style={styles.row}>
-          <View style={[styles.inputContainer, styles.halfInput]}>
-            <Text style={[styles.inputLabel, { color: colors.text }]}>Days *</Text>
-            <View style={[styles.inputGroup, { backgroundColor: colors.card }]}>
-              <Ionicons name="calendar-outline" size={20} color={colors.primary} />
-              <TextInput
-                style={[styles.input, { color: colors.text }]}
-                placeholder="3"
-                placeholderTextColor={colors.textLight}
-                value={formData.days}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, days: text }))}
-                keyboardType="numeric"
-                maxLength={2}
-              />
+        {/* Trip Type Selection */}
+        <View style={styles.inputContainer}>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>Trip Type *</Text>
+          <View style={styles.tripTypeContainer}>
+            <TouchableOpacity
+              style={[
+                styles.tripTypeCard,
+                { 
+                  backgroundColor: formData.tripType === 'short' ? colors.primary + '20' : colors.card,
+                  borderColor: formData.tripType === 'short' ? colors.primary : colors.border,
+                },
+              ]}
+              onPress={() => setFormData(prev => ({ ...prev, tripType: 'short' }))}
+              activeOpacity={0.7}
+            >
+              <View style={[
+                styles.tripTypeIcon,
+                { backgroundColor: formData.tripType === 'short' ? colors.primary : colors.border }
+              ]}>
+                <Ionicons 
+                  name="flash" 
+                  size={24} 
+                  color={formData.tripType === 'short' ? '#FFFFFF' : colors.textSecondary} 
+                />
+              </View>
+              <Text style={[
+                styles.tripTypeTitle,
+                { color: formData.tripType === 'short' ? colors.primary : colors.text }
+              ]}>
+                Short Trip
+              </Text>
+              <Text style={[styles.tripTypeSubtitle, { color: colors.textSecondary }]}>
+                1-3 days • Quick getaway
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.tripTypeCard,
+                { 
+                  backgroundColor: formData.tripType === 'long' ? colors.accent + '20' : colors.card,
+                  borderColor: formData.tripType === 'long' ? colors.accent : colors.border,
+                },
+              ]}
+              onPress={() => setFormData(prev => ({ ...prev, tripType: 'long' }))}
+              activeOpacity={0.7}
+            >
+              <View style={[
+                styles.tripTypeIcon,
+                { backgroundColor: formData.tripType === 'long' ? colors.accent : colors.border }
+              ]}>
+                <Ionicons 
+                  name="calendar" 
+                  size={24} 
+                  color={formData.tripType === 'long' ? '#FFFFFF' : colors.textSecondary} 
+                />
+              </View>
+              <Text style={[
+                styles.tripTypeTitle,
+                { color: formData.tripType === 'long' ? colors.accent : colors.text }
+              ]}>
+                Long Trip
+              </Text>
+              <Text style={[styles.tripTypeSubtitle, { color: colors.textSecondary }]}>
+                4+ days • Extended journey
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Days */}
+        <View style={styles.inputContainer}>
+          <Text style={[styles.inputLabel, { color: colors.text }]}>Duration (Days) *</Text>
+          <View style={[styles.inputGroup, { backgroundColor: colors.card }]}>
+            <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+            <TextInput
+              style={[styles.input, { color: colors.text }]}
+              placeholder={formData.tripType === 'short' ? '1-3' : '4+'}
+              placeholderTextColor={colors.textLight}
+              value={formData.days}
+              onChangeText={(text) => setFormData(prev => ({ ...prev, days: text }))}
+              keyboardType="numeric"
+              maxLength={2}
+            />
+          </View>
+        </View>
+
+        {/* Budget Breakdown */}
+        <View style={styles.budgetSection}>
+          <View style={styles.budgetHeader}>
+            <Ionicons name="wallet-outline" size={20} color={colors.accent} />
+            <Text style={[styles.sectionLabel, { color: colors.text, marginBottom: 0, marginLeft: 0 }]}>
+              Budget Breakdown (NPR)
+            </Text>
+          </View>
+          <Text style={[styles.budgetHint, { color: colors.textSecondary }]}>
+            Add only what you spent. Leave blank if not applicable.
+          </Text>
+
+          {/* Accommodation */}
+          <View style={styles.budgetItemContainer}>
+            <View style={[styles.budgetItemIcon, { backgroundColor: '#2679FF20' }]}>
+              <Ionicons name="bed-outline" size={20} color="#2679FF" />
+            </View>
+            <View style={styles.budgetItemInput}>
+              <Text style={[styles.budgetItemLabel, { color: colors.text }]}>Accommodation</Text>
+              <View style={[styles.inputGroup, styles.budgetInput, { backgroundColor: colors.card }]}>
+                <Ionicons name="cash-outline" size={16} color={colors.textSecondary} />
+                <TextInput
+                  style={[styles.input, { color: colors.text }]}
+                  placeholder="0"
+                  placeholderTextColor={colors.textLight}
+                  value={formData.budgetBreakdown.accommodation}
+                  onChangeText={(text) => setFormData(prev => ({
+                    ...prev,
+                    budgetBreakdown: { ...prev.budgetBreakdown, accommodation: text }
+                  }))}
+                  keyboardType="numeric"
+                />
+              </View>
             </View>
           </View>
 
-          <View style={[styles.inputContainer, styles.halfInput]}>
-            <Text style={[styles.inputLabel, { color: colors.text }]}>Budget (NPR)</Text>
-            <View style={[styles.inputGroup, { backgroundColor: colors.card }]}>
-              <Ionicons name="cash-outline" size={20} color={colors.primary} />
-              <TextInput
-                style={[styles.input, { color: colors.text }]}
-                placeholder="15000"
-                placeholderTextColor={colors.textLight}
-                value={formData.budget}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, budget: text }))}
-                keyboardType="numeric"
-              />
+          {/* Food */}
+          <View style={styles.budgetItemContainer}>
+            <View style={[styles.budgetItemIcon, { backgroundColor: '#00C89620' }]}>
+              <Ionicons name="restaurant-outline" size={20} color="#00C896" />
+            </View>
+            <View style={styles.budgetItemInput}>
+              <Text style={[styles.budgetItemLabel, { color: colors.text }]}>Food & Drinks</Text>
+              <View style={[styles.inputGroup, styles.budgetInput, { backgroundColor: colors.card }]}>
+                <Ionicons name="cash-outline" size={16} color={colors.textSecondary} />
+                <TextInput
+                  style={[styles.input, { color: colors.text }]}
+                  placeholder="0"
+                  placeholderTextColor={colors.textLight}
+                  value={formData.budgetBreakdown.food}
+                  onChangeText={(text) => setFormData(prev => ({
+                    ...prev,
+                    budgetBreakdown: { ...prev.budgetBreakdown, food: text }
+                  }))}
+                  keyboardType="numeric"
+                />
+              </View>
             </View>
           </View>
+
+          {/* Transport */}
+          <View style={styles.budgetItemContainer}>
+            <View style={[styles.budgetItemIcon, { backgroundColor: '#FF950020' }]}>
+              <Ionicons name="car-outline" size={20} color="#FF9500" />
+            </View>
+            <View style={styles.budgetItemInput}>
+              <Text style={[styles.budgetItemLabel, { color: colors.text }]}>Transport *</Text>
+              <View style={[styles.inputGroup, styles.budgetInput, { backgroundColor: colors.card }]}>
+                <Ionicons name="cash-outline" size={16} color={colors.textSecondary} />
+                <TextInput
+                  style={[styles.input, { color: colors.text }]}
+                  placeholder="Required"
+                  placeholderTextColor={colors.textLight}
+                  value={formData.budgetBreakdown.transport}
+                  onChangeText={(text) => setFormData(prev => ({
+                    ...prev,
+                    budgetBreakdown: { ...prev.budgetBreakdown, transport: text }
+                  }))}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Activities */}
+          <View style={styles.budgetItemContainer}>
+            <View style={[styles.budgetItemIcon, { backgroundColor: '#FF3B3020' }]}>
+              <Ionicons name="bicycle-outline" size={20} color="#FF3B30" />
+            </View>
+            <View style={styles.budgetItemInput}>
+              <Text style={[styles.budgetItemLabel, { color: colors.text }]}>Activities</Text>
+              <View style={[styles.inputGroup, styles.budgetInput, { backgroundColor: colors.card }]}>
+                <Ionicons name="cash-outline" size={16} color={colors.textSecondary} />
+                <TextInput
+                  style={[styles.input, { color: colors.text }]}
+                  placeholder="0"
+                  placeholderTextColor={colors.textLight}
+                  value={formData.budgetBreakdown.activities}
+                  onChangeText={(text) => setFormData(prev => ({
+                    ...prev,
+                    budgetBreakdown: { ...prev.budgetBreakdown, activities: text }
+                  }))}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Total Budget Display */}
+          {(() => {
+            const total = 
+              (parseInt(formData.budgetBreakdown.accommodation) || 0) +
+              (parseInt(formData.budgetBreakdown.food) || 0) +
+              (parseInt(formData.budgetBreakdown.transport) || 0) +
+              (parseInt(formData.budgetBreakdown.activities) || 0);
+            
+            return total > 0 ? (
+              <View style={[styles.totalBudgetCard, { backgroundColor: colors.accent + '15', borderColor: colors.accent }]}>
+                <Text style={[styles.totalBudgetLabel, { color: colors.textSecondary }]}>
+                  Total Budget
+                </Text>
+                <Text style={[styles.totalBudgetAmount, { color: colors.accent }]}>
+                  NPR {total.toLocaleString()}
+                </Text>
+              </View>
+            ) : null;
+          })()}
         </View>
 
         {/* Interests */}
@@ -614,10 +932,10 @@ const CreatePostScreen = () => {
         <TouchableOpacity
           style={[
             styles.continueButton,
-            (!formData.title.trim() || !formData.days) && { opacity: 0.5 },
+            (!formData.title.trim() || !formData.days || !formData.tripType || !formData.budgetBreakdown.transport) && { opacity: 0.5 },
           ]}
           onPress={handleCreatePost}
-          disabled={!formData.title.trim() || !formData.days || uploading}
+          disabled={!formData.title.trim() || !formData.days || !formData.tripType || !formData.budgetBreakdown.transport || uploading}
         >
           <LinearGradient
             colors={[colors.accent, colors.accent]}
@@ -673,10 +991,34 @@ const CreatePostScreen = () => {
       <View style={styles.buttonRow}>
         <TouchableOpacity
           style={[styles.doneButton, { backgroundColor: colors.card }]}
-          onPress={() => navigation.navigate('HomeTab')}
+          onPress={() => {
+            // Reset form and go back to upload step
+            setMediaAsset(null);
+            setCloudinaryData(null);
+            setFormData({
+              title: '',
+              description: '',
+              location: {
+                name: '',
+                coordinates: null,
+                address: '',
+              },
+              tripType: '',
+              days: '',
+              budgetBreakdown: {
+                accommodation: '',
+                food: '',
+                transport: '',
+                activities: '',
+              },
+              interests: [],
+            });
+            setStep(1);
+          }}
         >
+          <Ionicons name="add-circle-outline" size={20} color={colors.text} />
           <Text style={[styles.doneButtonText, { color: colors.text }]}>
-            View Feed
+            Create Another
           </Text>
         </TouchableOpacity>
 
@@ -688,8 +1030,8 @@ const CreatePostScreen = () => {
             colors={[colors.primary, colors.primary]}
             style={styles.gradientButton}
           >
-            <Text style={styles.continueButtonText}>My Profile</Text>
-            <Ionicons name="person" size={20} color="#FFFFFF" />
+            <Text style={styles.continueButtonText}>View Profile</Text>
+            <Ionicons name="checkmark" size={20} color="#FFFFFF" />
           </LinearGradient>
         </TouchableOpacity>
       </View>
@@ -700,7 +1042,32 @@ const CreatePostScreen = () => {
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.card }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => {
+          // Clear media if exists before going back
+          if (mediaAsset) {
+            setMediaAsset(null);
+            setFormData({
+              title: '',
+              description: '',
+              location: {
+                name: '',
+                coordinates: null,
+                address: '',
+              },
+              tripType: '',
+              days: '',
+              budgetBreakdown: {
+                accommodation: '',
+                food: '',
+                transport: '',
+                activities: '',
+              },
+              interests: [],
+            });
+          } else {
+            navigation.goBack();
+          }
+        }}>
           <Ionicons name="close" size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.text }]}>
@@ -734,6 +1101,7 @@ const CreatePostScreen = () => {
         style={styles.content}
       >
         <ScrollView
+          ref={scrollRef}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
@@ -879,7 +1247,7 @@ const styles = StyleSheet.create({
   },
   mediaPreview: {
     width: '100%',
-    height: 400,
+    aspectRatio: 9 / 16,
     borderRadius: BORDER_RADIUS.xl,
   },
   locationBadge: {
@@ -989,6 +1357,90 @@ const styles = StyleSheet.create({
   halfInput: {
     flex: 1,
   },
+  tripTypeContainer: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+  },
+  tripTypeCard: {
+    flex: 1,
+    padding: SPACING.lg,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 2,
+    alignItems: 'center',
+  },
+  tripTypeIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: SPACING.sm,
+  },
+  tripTypeTitle: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.bold,
+    marginBottom: SPACING.xs,
+  },
+  tripTypeSubtitle: {
+    fontSize: FONT_SIZES.xs,
+    textAlign: 'center',
+  },
+  budgetSection: {
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.lg,
+  },
+  budgetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    marginBottom: SPACING.xs,
+  },
+  budgetHint: {
+    fontSize: FONT_SIZES.xs,
+    marginBottom: SPACING.md,
+    fontStyle: 'italic',
+  },
+  budgetItemContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  budgetItemIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  budgetItemInput: {
+    flex: 1,
+  },
+  budgetItemLabel: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: FONT_WEIGHTS.semibold,
+    marginBottom: SPACING.xs,
+  },
+  budgetInput: {
+    paddingVertical: SPACING.sm,
+  },
+  totalBudgetCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SPACING.lg,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 2,
+    marginTop: SPACING.md,
+  },
+  totalBudgetLabel: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  totalBudgetAmount: {
+    fontSize: FONT_SIZES.xl,
+    fontWeight: FONT_WEIGHTS.bold,
+  },
   interestsSection: {
     marginTop: SPACING.lg,
   },
@@ -1086,9 +1538,12 @@ const styles = StyleSheet.create({
   },
   doneButton: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
     paddingVertical: SPACING.lg,
     borderRadius: BORDER_RADIUS.lg,
-    alignItems: 'center',
   },
   doneButtonText: {
     fontSize: FONT_SIZES.md,

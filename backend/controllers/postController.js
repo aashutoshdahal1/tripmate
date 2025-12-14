@@ -1,4 +1,5 @@
 const Post = require('../models/Post');
+const User = require('../models/User');
 const cloudinary = require('cloudinary').v2;
 
 // Configure Cloudinary
@@ -50,10 +51,18 @@ exports.createPost = async (req, res) => {
       aiSuggestions,
     });
 
+    // Increment user's trips count
+    await User.findByIdAndUpdate(
+      req.user._id,
+      { $inc: { 'stats.trips': 1 } },
+      { new: true }
+    );
+
     // Populate user data
     await post.populate('user', 'fullName avatar email');
 
     console.log('✅ POST CREATED:', post._id);
+    console.log('✅ USER STATS UPDATED');
 
     res.status(201).json({
       success: true,
@@ -139,11 +148,15 @@ exports.getUserPosts = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const userId = req.params.userId;
 
+    console.log('📥 GET USER POSTS:', { userId, page, limit });
+
     const posts = await Post.getUserPosts(userId, page, limit);
     const total = await Post.countDocuments({ 
       user: userId, 
       status: 'published' 
     });
+
+    console.log('✅ FOUND POSTS:', posts.length, 'TOTAL:', total);
 
     res.status(200).json({
       success: true,
@@ -244,6 +257,15 @@ exports.deletePost = async (req, res) => {
     }
 
     await post.deleteOne();
+
+    // Decrement user's trips count
+    await User.findByIdAndUpdate(
+      post.user,
+      { $inc: { 'stats.trips': -1 } },
+      { new: true }
+    );
+
+    console.log('✅ USER STATS UPDATED (DECREMENTED)');
 
     res.status(200).json({
       success: true,

@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getCurrentUser, logout as apiLogout } from '../services/api';
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
@@ -14,10 +16,16 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
-      const response = await getCurrentUser();
-      if (response.success) {
-        setUser(response.user);
-        setIsAuthenticated(true);
+      // Get token from AsyncStorage
+      const storedToken = await AsyncStorage.getItem('token');
+      
+      if (storedToken) {
+        setToken(storedToken);
+        const response = await getCurrentUser();
+        if (response.success) {
+          setUser(response.user);
+          setIsAuthenticated(true);
+        }
       }
     } catch (error) {
       console.log('Not authenticated');
@@ -27,14 +35,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = (userData) => {
+  const login = async (userData, authToken) => {
     setUser(userData);
+    setToken(authToken);
     setIsAuthenticated(true);
+    // Store token in AsyncStorage
+    await AsyncStorage.setItem('token', authToken);
   };
 
   const logout = async () => {
     await apiLogout();
+    await AsyncStorage.removeItem('token');
     setUser(null);
+    setToken(null);
     setIsAuthenticated(false);
   };
 
@@ -46,6 +59,7 @@ export const AuthProvider = ({ children }) => {
     <AuthContext.Provider
       value={{
         user,
+        token,
         loading,
         isAuthenticated,
         login,

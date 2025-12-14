@@ -57,11 +57,22 @@ const PostSchema = new mongoose.Schema({
       type: Number, // in days
       required: true,
     },
+    tripType: {
+      type: String,
+      enum: ['short', 'long'],
+      default: 'short',
+    },
     budget: {
       amount: Number,
       currency: {
         type: String,
         default: 'NPR',
+      },
+      breakdown: {
+        accommodation: { type: Number, default: 0 },
+        food: { type: Number, default: 0 },
+        transport: { type: Number, default: 0 },
+        activities: { type: Number, default: 0 },
       },
     },
     interests: [{
