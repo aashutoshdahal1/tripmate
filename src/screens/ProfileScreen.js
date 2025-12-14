@@ -8,34 +8,25 @@ import {
   FlatList,
   Image,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import { BORDER_RADIUS, SPACING, FONT_SIZES, FONT_WEIGHTS } from '../constants/colors';
 
 const { width } = Dimensions.get('window');
 
 const ProfileScreen = () => {
   const navigation = useNavigation();
-  const { colors, shadows, isDark, toggleTheme } = useTheme();
+  const { colors, shadows } = useTheme();
+  const { user, loading, isAuthenticated } = useAuth();
   const [activeTab, setActiveTab] = React.useState('trips');
 
-  const profile = {
-    name: 'Sarah Chen',
-    username: '@sarahexplores',
-    bio: 'Travel enthusiast 🌍 | Adventure seeker ⛰️ | Food lover 🍜',
-    avatar: 'https://i.pravatar.cc/150?img=1',
-    coverImage: 'https://images.pexels.com/photos/1450360/pexels-photo-1450360.jpeg',
-    stats: {
-      trips: 24,
-      followers: 3420,
-      following: 892,
-    },
-  };
-
+  // Static data for trips (will be dynamic from API later)
   const tabs = [
     { id: 'trips', label: 'My Trips', icon: 'map' },
     { id: 'saved', label: 'Saved', icon: 'bookmark' },
@@ -101,12 +92,99 @@ const ProfileScreen = () => {
     </TouchableOpacity>
   );
 
+  // Loading state
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            Loading profile...
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Not authenticated - show login/signup
+  if (!isAuthenticated) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <ScrollView contentContainerStyle={styles.authContainer}>
+          {/* Icon */}
+          <View style={[styles.authIcon, { backgroundColor: colors.primaryAlpha }]}>
+            <Ionicons name="person-outline" size={64} color={colors.primary} />
+          </View>
+
+          {/* Title */}
+          <Text style={[styles.authTitle, { color: colors.text }]}>
+            Join TripMate
+          </Text>
+          <Text style={[styles.authSubtitle, { color: colors.textSecondary }]}>
+            Sign in to create your profile, share trips, and connect with travelers
+          </Text>
+
+          {/* Features */}
+          <View style={styles.authFeatures}>
+            {[
+              { icon: 'map', text: 'Share your travel stories' },
+              { icon: 'bookmark', text: 'Save favorite destinations' },
+              { icon: 'people', text: 'Connect with travelers' },
+            ].map((feature, idx) => (
+              <View key={idx} style={styles.authFeature}>
+                <View style={[styles.authFeatureIcon, { backgroundColor: colors.card }]}>
+                  <Ionicons name={feature.icon} size={24} color={colors.primary} />
+                </View>
+                <Text style={[styles.authFeatureText, { color: colors.text }]}>
+                  {feature.text}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Buttons */}
+          <View style={styles.authButtons}>
+            <TouchableOpacity
+              style={[styles.authPrimaryButton]}
+              onPress={() => navigation.navigate('Signup')}
+              activeOpacity={0.9}
+            >
+              <LinearGradient
+                colors={[colors.primary, colors.primary]}
+                style={styles.gradientButton}
+              >
+                <Text style={styles.authPrimaryButtonText}>Create Account</Text>
+                <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.authSecondaryButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => navigation.navigate('Login')}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.authSecondaryButtonText, { color: colors.text }]}>
+                Sign In
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // Authenticated - show profile
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Cover Image & Header */}
         <View style={styles.coverContainer}>
-          <Image source={{ uri: profile.coverImage }} style={styles.coverImage} />
+          <Image 
+            source={{ 
+              uri: user?.coverImage || 'https://images.pexels.com/photos/31410276/pexels-photo-31410276.jpeg' 
+            }} 
+            style={styles.coverImage} 
+          />
           <LinearGradient
             colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.7)']}
             style={styles.coverGradient}
@@ -114,12 +192,7 @@ const ProfileScreen = () => {
           
           {/* Header Buttons */}
           <View style={styles.headerButtons}>
-            <TouchableOpacity 
-              style={[styles.headerIconButton, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
-              onPress={() => navigation.goBack()}
-            >
-              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
+            <View style={{ width: 40 }} />
             <TouchableOpacity 
               style={[styles.headerIconButton, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
               onPress={() => navigation.navigate('Settings')}
@@ -131,20 +204,40 @@ const ProfileScreen = () => {
           {/* Profile Avatar - Overlapping */}
           <View style={styles.avatarContainer}>
             <View style={[styles.avatarWrapper, { borderColor: colors.background }]}>
-              <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+              <Image 
+                source={{ uri: user?.avatar || 'https://i.pravatar.cc/150' }} 
+                style={styles.avatar} 
+              />
             </View>
           </View>
         </View>
 
         {/* Profile Info */}
         <View style={styles.profileInfo}>
-          <Text style={[styles.name, { color: colors.text }]}>{profile.name}</Text>
-          <Text style={[styles.username, { color: colors.textSecondary }]}>{profile.username}</Text>
-          <Text style={[styles.bio, { color: colors.text }]}>{profile.bio}</Text>
+          <Text style={[styles.name, { color: colors.text }]}>
+            {user?.fullName || 'User'}
+          </Text>
+          <Text style={[styles.username, { color: colors.textSecondary }]}>
+            {user?.email}
+          </Text>
+          {user?.bio ? (
+            <Text style={[styles.bio, { color: colors.text }]}>{user.bio}</Text>
+          ) : null}
+          {user?.location ? (
+            <View style={styles.locationRow}>
+              <Ionicons name="location" size={16} color={colors.textSecondary} />
+              <Text style={[styles.locationText, { color: colors.textSecondary }]}>
+                {user.location}
+              </Text>
+            </View>
+          ) : null}
 
           {/* Action Buttons */}
           <View style={styles.actionButtons}>
-            <TouchableOpacity style={[styles.editButton, { backgroundColor: colors.primary }]}>
+            <TouchableOpacity 
+              style={[styles.editButton, { backgroundColor: colors.primary }]}
+              onPress={() => navigation.navigate('EditProfile')}
+            >
               <Ionicons name="create-outline" size={18} color="#FFFFFF" />
               <Text style={styles.editButtonText}>Edit Profile</Text>
             </TouchableOpacity>
@@ -159,19 +252,19 @@ const ProfileScreen = () => {
           <View style={styles.statsRow}>
             <TouchableOpacity style={styles.stat}>
               <Text style={[styles.statNumber, { color: colors.text }]}>
-                {profile.stats.trips}
+                {user?.stats?.trips || 0}
               </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Trips</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.stat}>
               <Text style={[styles.statNumber, { color: colors.text }]}>
-                {(profile.stats.followers / 1000).toFixed(1)}k
+                {user?.stats?.followers || 0}
               </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Followers</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.stat}>
               <Text style={[styles.statNumber, { color: colors.text }]}>
-                {profile.stats.following}
+                {user?.stats?.following || 0}
               </Text>
               <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Following</Text>
             </TouchableOpacity>
@@ -250,6 +343,94 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  // Loading State
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  loadingText: {
+    fontSize: FONT_SIZES.md,
+  },
+  // Auth (Not Logged In) State
+  authContainer: {
+    flexGrow: 1,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.xxxl,
+    justifyContent: 'center',
+  },
+  authIcon: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: SPACING.xl,
+  },
+  authTitle: {
+    fontSize: FONT_SIZES.xxxl,
+    fontWeight: FONT_WEIGHTS.bold,
+    textAlign: 'center',
+    marginBottom: SPACING.sm,
+  },
+  authSubtitle: {
+    fontSize: FONT_SIZES.md,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: SPACING.xxxl,
+  },
+  authFeatures: {
+    gap: SPACING.lg,
+    marginBottom: SPACING.xxxl,
+  },
+  authFeature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  authFeatureIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: BORDER_RADIUS.lg,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  authFeatureText: {
+    flex: 1,
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.medium,
+  },
+  authButtons: {
+    gap: SPACING.md,
+  },
+  authPrimaryButton: {
+    borderRadius: BORDER_RADIUS.lg,
+    overflow: 'hidden',
+  },
+  gradientButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.lg,
+  },
+  authPrimaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.lg,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  authSecondaryButton: {
+    paddingVertical: SPACING.lg,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  authSecondaryButtonText: {
+    fontSize: FONT_SIZES.lg,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
   // Cover Section
   coverContainer: {
     position: 'relative',
@@ -313,7 +494,16 @@ const styles = StyleSheet.create({
   bio: {
     fontSize: FONT_SIZES.md,
     lineHeight: 20,
+    marginBottom: SPACING.sm,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     marginBottom: SPACING.lg,
+  },
+  locationText: {
+    fontSize: FONT_SIZES.sm,
   },
   // Action Buttons
   actionButtons: {

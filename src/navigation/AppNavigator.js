@@ -17,6 +17,7 @@ import ProfileScreen from '../screens/ProfileScreen';
 import PostDetailsScreen from '../screens/PostDetailsScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import EditProfileScreen from '../screens/EditProfileScreen';
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -132,6 +133,13 @@ const AppNavigator = () => {
         <Stack.Screen
           name="Settings"
           component={SettingsScreen}
+          options={{
+            presentation: 'card',
+          }}
+        />
+        <Stack.Screen
+          name="EditProfile"
+          component={EditProfileScreen}
           options={{
             presentation: 'card',
           }}

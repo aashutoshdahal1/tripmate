@@ -5,16 +5,19 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import { BORDER_RADIUS, SPACING, FONT_SIZES, FONT_WEIGHTS } from '../constants/colors';
 
 const SettingsScreen = () => {
   const navigation = useNavigation();
   const { colors, shadows, isDark, toggleTheme } = useTheme();
+  const { logout } = useAuth();
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
@@ -241,8 +244,27 @@ const SettingsScreen = () => {
           <TouchableOpacity 
             style={[styles.logoutButton, { backgroundColor: colors.card }, shadows.sm]}
             onPress={() => {
-              // Handle logout
-              navigation.navigate('GetStarted');
+              Alert.alert(
+                'Logout',
+                'Are you sure you want to logout?',
+                [
+                  {
+                    text: 'Cancel',
+                    style: 'cancel',
+                  },
+                  {
+                    text: 'Logout',
+                    style: 'destructive',
+                    onPress: async () => {
+                      await logout();
+                      navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'GetStarted' }],
+                      });
+                    },
+                  },
+                ]
+              );
             }}
           >
             <Ionicons name="log-out-outline" size={20} color="#FF4757" />

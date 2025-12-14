@@ -9,35 +9,72 @@ import {
   Platform,
   ScrollView,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import { BORDER_RADIUS, SPACING, FONT_SIZES, FONT_WEIGHTS } from '../constants/colors';
+import { loginUser } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
 const LoginScreen = () => {
   const navigation = useNavigation();
   const { colors } = useTheme();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleLogin = async () => {
+    // Reset error
+    setError('');
+
+    // Validate inputs
+    if (!email.trim() || !password.trim()) {
+      setError('Please fill in all fields');
+      return;
+    }
+
+    if (!email.includes('@')) {
+      setError('Please enter a valid email');
+      return;
+    }
+
     setIsLoading(true);
-    // Simulate API call
-    setTimeout(() => {
+
+    try {
+      const response = await loginUser(email.trim(), password);
+      
+      // Update AuthContext with user data
+      await login(response.user, response.token);
+      
+      Alert.alert(
+        'Success',
+        'Login successful!',
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.navigate('Main'),
+          },
+        ]
+      );
+    } catch (err) {
+      setError(err.message || 'Login failed. Please try again.');
+      Alert.alert('Login Failed', err.message || 'Please check your credentials and try again.');
+    } finally {
       setIsLoading(false);
-      navigation.navigate('Main');
-    }, 1500);
+    }
   };
 
-  const handleSocialLogin = (provider) => {
-    console.log(`Login with ${provider}`);
-    navigation.navigate('Main');
+  const handleGoogleLogin = () => {
+    // TODO: Implement Google OAuth
+    Alert.alert('Coming Soon', 'Google sign-in will be available soon!');
   };
 
   return (
@@ -115,6 +152,14 @@ const LoginScreen = () => {
             </View>
           </View>
 
+          {/* Error Message */}
+          {error ? (
+            <View style={styles.errorContainer}>
+              <Ionicons name="alert-circle" size={16} color="#FF3B30" />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
           {/* Forgot Password */}
           <TouchableOpacity style={styles.forgotPassword}>
             <Text style={[styles.forgotPasswordText, { color: colors.primary }]}>
@@ -155,23 +200,13 @@ const LoginScreen = () => {
         </View>
 
         {/* Social Login */}
-        <View style={styles.socialButtons}>
-          <TouchableOpacity
-            style={[styles.socialButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => handleSocialLogin('Google')}
-          >
-            <Ionicons name="logo-google" size={24} color="#DB4437" />
-            <Text style={[styles.socialButtonText, { color: colors.text }]}>Google</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.socialButton, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={() => handleSocialLogin('Apple')}
-          >
-            <Ionicons name="logo-apple" size={24} color={colors.text} />
-            <Text style={[styles.socialButtonText, { color: colors.text }]}>Apple</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={[styles.googleButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+          onPress={handleGoogleLogin}
+        >
+          <Ionicons name="logo-google" size={24} color="#DB4437" />
+          <Text style={[styles.socialButtonText, { color: colors.text }]}>Continue with Google</Text>
+        </TouchableOpacity>
 
         {/* Sign Up Link */}
         <View style={styles.signupLink}>
@@ -252,6 +287,18 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     paddingVertical: 0,
   },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+    marginBottom: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontSize: FONT_SIZES.sm,
+    flex: 1,
+  },
   forgotPassword: {
     alignSelf: 'flex-end',
     marginBottom: SPACING.xl,
@@ -292,13 +339,7 @@ const styles = StyleSheet.create({
     marginHorizontal: SPACING.md,
     fontSize: FONT_SIZES.sm,
   },
-  socialButtons: {
-    flexDirection: 'row',
-    gap: SPACING.md,
-    marginBottom: SPACING.xl,
-  },
-  socialButton: {
-    flex: 1,
+  googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -306,6 +347,7 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     borderRadius: BORDER_RADIUS.lg,
     borderWidth: 1,
+    marginBottom: SPACING.xl,
   },
   socialButtonText: {
     fontSize: FONT_SIZES.md,

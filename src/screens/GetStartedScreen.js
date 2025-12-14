@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   Dimensions,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/AuthContext';
 import { BORDER_RADIUS, SPACING, FONT_SIZES, FONT_WEIGHTS } from '../constants/colors';
 
 const { width, height } = Dimensions.get('window');
@@ -19,25 +21,52 @@ const { width, height } = Dimensions.get('window');
 const GetStartedScreen = () => {
   const navigation = useNavigation();
   const { colors } = useTheme();
+  const { isAuthenticated, loading } = useAuth();
   
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
 
+  // Check if user is already logged in
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 20,
-        friction: 7,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+    if (!loading && isAuthenticated) {
+      // User is already logged in, redirect to Main
+      navigation.replace('Main');
+    }
+  }, [isAuthenticated, loading, navigation]);
+
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      // Only animate if user is not authenticated
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.spring(slideAnim, {
+          toValue: 0,
+          tension: 20,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [loading, isAuthenticated]);
+
+  // Show loading spinner while checking authentication
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading...</Text>
+      </View>
+    );
+  }
+
+  // Don't render anything if user is authenticated (will redirect)
+  if (isAuthenticated) {
+    return null;
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -155,6 +184,15 @@ const GetStartedScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: SPACING.md,
+  },
+  loadingText: {
+    fontSize: FONT_SIZES.md,
+    marginTop: SPACING.sm,
   },
   gradientBackground: {
     flex: 1,
