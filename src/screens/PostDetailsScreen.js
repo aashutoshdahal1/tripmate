@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,13 +8,17 @@ import {
   Dimensions,
   Animated,
   Image,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import { Video, ResizeMode } from 'expo-av';
 import { useTheme } from '../contexts/ThemeContext';
 import { BORDER_RADIUS, SPACING, FONT_SIZES, FONT_WEIGHTS } from '../constants/colors';
+import { getPostById } from '../services/postService';
 
 const { width, height } = Dimensions.get('window');
 
@@ -22,101 +26,61 @@ const PostDetailsScreen = () => {
   const route = useRoute();
   const navigation = useNavigation();
   const { colors, shadows } = useTheme();
+  // Handle both postId and tripId for backward compatibility
+  const { postId, tripId } = route.params || {};
+  const id = postId || tripId;
+  
   const [activeTab, setActiveTab] = useState('vlog');
   const [isSaved, setIsSaved] = useState(false);
   const [isLiked, setIsLiked] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+  const [soundOn, setSoundOn] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [post, setPost] = useState(null);
+  const [error, setError] = useState(null);
+  
+  const scrollY = useRef(new Animated.Value(0)).current;
   const saveAnim = useRef(new Animated.Value(1)).current;
   const likeAnim = useRef(new Animated.Value(1)).current;
+  const videoRef = useRef(null);
 
-  const trip = {
-    id: 1,
-    title: 'Hidden Paradise in the Mountains',
-    location: 'Pokhara',
-    country: 'Nepal',
-    days: 3,
-    cost: 12500,
-    currency: 'NPR',
-    author: {
-      name: 'Sarah Chen',
-      avatar: 'https://i.pravatar.cc/150?img=1',
-      bio: 'Travel enthusiast 🌍 | 47 trips shared',
-      verified: true,
-    },
-    likes: 1240,
-    comments: 89,
-    views: 12400,
-    saved: false,
-    images: [
-      'https://images.pexels.com/photos/1450360/pexels-photo-1450360.jpeg',
-      'https://images.pexels.com/photos/1562/italian-landscape-mountains-nature.jpg',
-      'https://images.pexels.com/photos/1287460/pexels-photo-1287460.jpeg',
-    ],
-    vlogs: [
-      {
-        id: 1,
-        thumbnail: 'https://images.pexels.com/photos/1450360/pexels-photo-1450360.jpeg',
-        title: 'Sunrise at Sarangkot',
-        duration: '5:23',
-        views: 12400,
-      },
-      {
-        id: 2,
-        thumbnail: 'https://images.pexels.com/photos/1562/italian-landscape-mountains-nature.jpg',
-        title: 'Paragliding Adventure',
-        duration: '8:45',
-        views: 8900,
-      },
-      {
-        id: 3,
-        thumbnail: 'https://images.pexels.com/photos/1287460/pexels-photo-1287460.jpeg',
-        title: 'Peace Pagoda Hike',
-        duration: '6:12',
-        views: 6700,
-      },
-    ],
-    itinerary: [
-      {
-        day: 1,
-        title: 'Arrival & Lakeside Exploration',
-        activities: [
-          { time: '06:00 AM', activity: 'Sunrise at Sarangkot', location: 'Sarangkot' },
-          { time: '09:00 AM', activity: 'Breakfast at German Bakery', location: 'Lakeside' },
-          { time: '11:00 AM', activity: 'Paragliding Adventure', location: 'Sarangkot' },
-          { time: '02:00 PM', activity: 'Lunch & Rest', location: 'Hotel' },
-          { time: '05:00 PM', activity: 'Sunset Boat Ride', location: 'Phewa Lake' },
-          { time: '07:00 PM', activity: 'Dinner at Local Restaurant', location: 'Lakeside' },
-        ],
-      },
-      {
-        day: 2,
-        title: 'Adventure & Nature',
-        activities: [
-          { time: '07:00 AM', activity: 'World Peace Pagoda Hike', location: 'Peace Pagoda' },
-          { time: '12:00 PM', activity: 'Lunch with Lake View', location: 'Lakeside' },
-          { time: '03:00 PM', activity: 'Davis Falls & Cave Visit', location: 'Davis Falls' },
-          { time: '06:00 PM', activity: 'Shopping at Lakeside', location: 'Lakeside' },
-          { time: '08:00 PM', activity: 'Traditional Nepali Dinner', location: 'Local Restaurant' },
-        ],
-      },
-      {
-        day: 3,
-        title: 'Departure',
-        activities: [
-          { time: '08:00 AM', activity: 'Breakfast & Check-out', location: 'Hotel' },
-          { time: '10:00 AM', activity: 'Last Minute Shopping', location: 'Lakeside' },
-          { time: '12:00 PM', activity: 'Departure', location: 'Pokhara' },
-        ],
-      },
-    ],
-    budget: {
-      accommodation: 4500,
-      food: 3500,
-      transport: 2000,
-      activities: 2500,
-      total: 12500,
-      perPerson: 12500,
-      groupSize: 1,
-    },
+  // Fetch post data on mount
+  useEffect(() => {
+    if (id) {
+      fetchPostData();
+    } else {
+      setError('No post ID provided');
+      setLoading(false);
+    }
+  }, [id]);
+
+  const fetchPostData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      console.log('📄 Fetching post details for:', id);
+      
+      const data = await getPostById(id);
+      console.log('✅ Post loaded successfully:');
+      console.log('   - Title:', data.title);
+      console.log('   - Media type:', data.media?.type);
+      console.log('   - Media URL:', data.media?.url);
+      console.log('   - Location:', data.location?.name);
+      console.log('   - User:', data.user?.fullName);
+      console.log('   - Budget:', data.tripDetails?.budget?.amount);
+      console.log('   - Vlogs count:', data.vlogs?.length || 0);
+      console.log('   - Full post data:', JSON.stringify(data, null, 2));
+      
+      setPost(data);
+      setIsSaved(data.saved || false);
+      setIsLiked(data.liked || false);
+    } catch (err) {
+      console.error('❌ Error loading post:', err);
+      setError(err.message || 'Failed to load post');
+      Alert.alert('Error', 'Failed to load post details. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const tabs = [
@@ -157,6 +121,25 @@ const PostDetailsScreen = () => {
     setIsLiked(!isLiked);
   };
 
+  // Parallax effect for header
+  const headerOpacity = scrollY.interpolate({
+    inputRange: [0, 150],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
+  const imageScale = scrollY.interpolate({
+    inputRange: [-100, 0],
+    outputRange: [1.3, 1],
+    extrapolate: 'clamp',
+  });
+
+  const imageTranslateY = scrollY.interpolate({
+    inputRange: [0, 300],
+    outputRange: [0, -50],
+    extrapolate: 'clamp',
+  });
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Simple Header - Always Visible */}
@@ -176,27 +159,98 @@ const PostDetailsScreen = () => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Simple Hero Image */}
+      {/* Loading State */}
+      {loading && (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            Loading post details...
+          </Text>
+        </View>
+      )}
+
+      {/* Error State */}
+      {error && !loading && (
+        <View style={styles.centerContainer}>
+          <Ionicons name="alert-circle-outline" size={64} color={colors.textSecondary} />
+          <Text style={[styles.errorText, { color: colors.text }]}>{error}</Text>
+          <TouchableOpacity 
+            style={[styles.retryButton, { backgroundColor: colors.primary }]}
+            onPress={fetchPostData}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Content - Only show when post is loaded */}
+      {!loading && !error && post && (
+        <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Hero Image/Video Section */}
         <View style={styles.imageContainer}>
-          <Image
-            source={{ uri: trip.images[0] }}
-            style={styles.mainImage}
-            resizeMode="cover"
-          />
+          {post.media?.type === 'video' ? (
+            <>
+              <Video
+                ref={videoRef}
+                source={{ uri: post.media.url }}
+                style={styles.mainImage}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay={true}
+                isLooping={true}
+                isMuted={!soundOn}
+                onLoad={() => setVideoReady(true)}
+                onError={(error) => {
+                  console.error('Video error:', error);
+                  setVideoReady(false);
+                }}
+              />
+              
+              {/* Loading indicator while video loads */}
+              {!videoReady && (
+                <View style={styles.videoLoadingContainer}>
+                  <ActivityIndicator size="large" color="#FFFFFF" />
+                </View>
+              )}
+              
+              {/* Sound toggle button */}
+              {videoReady && (
+                <TouchableOpacity
+                  style={styles.soundButton}
+                  onPress={() => setSoundOn(!soundOn)}
+                >
+                  <Ionicons 
+                    name={soundOn ? 'volume-high' : 'volume-mute'} 
+                    size={20} 
+                    color="#FFFFFF" 
+                  />
+                </TouchableOpacity>
+              )}
+            </>
+          ) : (
+            <Image
+              source={{ uri: post.media?.url || post.media?.thumbnail }}
+              style={styles.mainImage}
+              resizeMode="cover"
+            />
+          )}
         </View>
 
         {/* Content Container */}
         <View style={styles.contentContainer}>
           {/* Title & Location */}
           <View style={styles.titleSection}>
-            <Text style={[styles.title, { color: colors.text }]}>{trip.title}</Text>
+            <Text style={[styles.title, { color: colors.text }]}>{post.title}</Text>
             <View style={styles.locationRow}>
               <Ionicons name="location" size={18} color={colors.primary} />
               <Text style={[styles.locationText, { color: colors.textSecondary }]}>
-                {trip.location}, {trip.country}
+                {post.location?.name || post.location?.address || 'Unknown Location'}
               </Text>
             </View>
+            {post.description && (
+              <Text style={[styles.description, { color: colors.textSecondary, marginTop: 12 }]}>
+                {post.description}
+              </Text>
+            )}
           </View>
 
           {/* Quick Info Cards */}
@@ -204,29 +258,49 @@ const PostDetailsScreen = () => {
             <View style={[styles.infoCard, { backgroundColor: colors.card }, shadows.sm]}>
               <Ionicons name="calendar-outline" size={20} color={colors.primary} />
               <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Duration</Text>
-              <Text style={[styles.infoValue, { color: colors.text }]}>{trip.days} Days</Text>
+              <Text style={[styles.infoValue, { color: colors.text }]}>
+                {post.tripDetails?.duration || 0} Days
+              </Text>
             </View>
             <View style={[styles.infoCard, { backgroundColor: colors.card }, shadows.sm]}>
               <Ionicons name="wallet-outline" size={20} color={colors.accent} />
               <Text style={[styles.infoLabel, { color: colors.textSecondary }]}>Cost</Text>
               <Text style={[styles.infoValue, { color: colors.text }]}>
-                {trip.currency} {(trip.cost / 1000).toFixed(1)}k
+                {post.tripDetails?.budget?.currency || 'NPR'} {((post.tripDetails?.budget?.amount || 0) / 1000).toFixed(1)}k
               </Text>
             </View>
           </View>
 
+          {/* Interests Tags */}
+          {post.tripDetails?.interests && post.tripDetails.interests.length > 0 && (
+            <View style={styles.interestsContainer}>
+              {post.tripDetails.interests.map((interest, idx) => (
+                <View key={idx} style={[styles.interestTag, { backgroundColor: colors.primary + '20' }]}>
+                  <Text style={[styles.interestText, { color: colors.primary }]}>
+                    {interest.charAt(0).toUpperCase() + interest.slice(1)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
           {/* Author Info */}
           <TouchableOpacity style={[styles.authorSection, { backgroundColor: colors.card }, shadows.sm]}>
-            <Image source={{ uri: trip.author.avatar }} style={styles.avatar} />
+            <Image 
+              source={{ uri: post.user?.avatar || 'https://i.pravatar.cc/150?img=1' }} 
+              style={styles.avatar} 
+            />
             <View style={styles.authorInfo}>
               <View style={styles.authorNameRow}>
-                <Text style={[styles.authorName, { color: colors.text }]}>{trip.author.name}</Text>
-                {trip.author.verified && (
+                <Text style={[styles.authorName, { color: colors.text }]}>
+                  {post.user?.fullName || 'Unknown User'}
+                </Text>
+                {post.user?.verified && (
                   <Ionicons name="checkmark-circle" size={14} color={colors.primary} />
                 )}
               </View>
               <Text style={[styles.authorBio, { color: colors.textSecondary }]}>
-                {trip.author.bio}
+                {post.user?.bio || `Travel enthusiast 🌍`}
               </Text>
             </View>
             <TouchableOpacity style={[styles.followBtn, { backgroundColor: colors.primary }]}>
@@ -246,17 +320,17 @@ const PostDetailsScreen = () => {
                 color={isLiked ? "#FF3B30" : colors.text} 
               />
               <Text style={[styles.statText, { color: colors.text }]}>
-                {isLiked ? trip.likes + 1 : trip.likes}
+                {isLiked ? (post.stats?.likes || 0) + 1 : (post.stats?.likes || 0)}
               </Text>
             </TouchableOpacity>
             <View style={styles.statItem}>
               <Ionicons name="chatbubble-outline" size={20} color={colors.text} />
-              <Text style={[styles.statText, { color: colors.text }]}>{trip.comments}</Text>
+              <Text style={[styles.statText, { color: colors.text }]}>{post.stats?.comments || 0}</Text>
             </View>
             <View style={styles.statItem}>
               <Ionicons name="eye-outline" size={22} color={colors.text} />
               <Text style={[styles.statText, { color: colors.text }]}>
-                {(trip.views / 1000).toFixed(1)}k
+                {((post.stats?.views || 0) / 1000).toFixed(1)}k
               </Text>
             </View>
             <TouchableOpacity style={styles.statItem}>
@@ -298,25 +372,22 @@ const PostDetailsScreen = () => {
           {/* Tab Content */}
           {activeTab === 'vlog' && (
             <View style={styles.tabContent}>
-
-
-
               {/* Vlog Grid */}
               <View style={styles.section}>
                 <Text style={[styles.sectionTitle, { color: colors.text }]}>
-                  Vlogs ({trip.vlogs.length})
+                  Vlogs ({post.vlogs?.length || 0})
                 </Text>
-                {trip.vlogs.length > 0 ? (
+                {post.vlogs && post.vlogs.length > 0 ? (
                   <View style={styles.vlogGrid}>
-                    {trip.vlogs.map((vlog) => (
+                    {post.vlogs.map((vlog, index) => (
                       <TouchableOpacity
-                        key={vlog.id}
+                        key={index}
                         style={[styles.vlogCard, { backgroundColor: colors.card }, shadows.sm]}
                         activeOpacity={0.8}
                       >
                         {/* Thumbnail */}
                         <View style={styles.vlogThumbnail}>
-                          <Image source={{ uri: vlog.thumbnail }} style={styles.vlogImage} />
+                          <Image source={{ uri: vlog.thumbnail || vlog.uri }} style={styles.vlogImage} />
                           <LinearGradient
                             colors={['transparent', 'rgba(0,0,0,0.6)']}
                             style={styles.vlogGradient}
@@ -326,20 +397,24 @@ const PostDetailsScreen = () => {
                             <Ionicons name="play-circle" size={48} color="#FFFFFF" />
                           </View>
                           {/* Duration Badge */}
-                          <View style={styles.durationBadge}>
-                            <Text style={styles.durationText}>{vlog.duration}</Text>
-                          </View>
+                          {vlog.duration && (
+                            <View style={styles.durationBadge}>
+                              <Text style={styles.durationText}>
+                                {Math.floor(vlog.duration / 60)}:{(vlog.duration % 60).toString().padStart(2, '0')}
+                              </Text>
+                            </View>
+                          )}
                         </View>
 
                         {/* Vlog Info */}
                         <View style={styles.vlogInfo}>
                           <Text style={[styles.vlogTitle, { color: colors.text }]} numberOfLines={2}>
-                            {vlog.title}
+                            {vlog.title || `Vlog ${index + 1}`}
                           </Text>
                           <View style={styles.vlogStats}>
-                            <Ionicons name="eye-outline" size={14} color={colors.textSecondary} />
+                            <Ionicons name="videocam-outline" size={14} color={colors.textSecondary} />
                             <Text style={[styles.vlogViews, { color: colors.textSecondary }]}>
-                              {(vlog.views / 1000).toFixed(1)}k views
+                              {vlog.duration ? `${Math.floor(vlog.duration / 60)}:${(vlog.duration % 60).toString().padStart(2, '0')}` : 'Video'}
                             </Text>
                           </View>
                         </View>
@@ -350,7 +425,7 @@ const PostDetailsScreen = () => {
                   <View style={styles.emptyVlog}>
                     <Ionicons name="videocam-outline" size={64} color={colors.textSecondary} />
                     <Text style={[styles.emptyVlogText, { color: colors.textSecondary }]}>
-                      No vlogs yet. Be the first to share!
+                      No vlogs available for this trip.
                     </Text>
                   </View>
                 )}
@@ -360,99 +435,137 @@ const PostDetailsScreen = () => {
 
           {activeTab === 'itinerary' && (
             <View style={styles.tabContent}>
-              {trip.itinerary.map((day, idx) => (
-                <View key={idx} style={styles.dayContainer}>
-                  {/* Day Header */}
-                  <View style={[styles.dayHeader, { backgroundColor: colors.card }, shadows.sm]}>
-                    <View style={[styles.dayBadge, { backgroundColor: colors.primary }]}>
-                      <Text style={styles.dayBadgeText}>Day {day.day}</Text>
-                    </View>
-                    <Text style={[styles.dayTitle, { color: colors.text }]}>{day.title}</Text>
-                  </View>
-
-                  {/* Activities */}
-                  {day.activities.map((activity, aIdx) => (
-                    <View 
-                      key={aIdx} 
-                      style={[styles.activityItem, { backgroundColor: colors.card }, shadows.sm]}
-                    >
-                      <View style={[styles.timeBadge, { backgroundColor: colors.backgroundAlt }]}>
-                        <Ionicons name="time-outline" size={14} color={colors.primary} />
-                        <Text style={[styles.timeText, { color: colors.textSecondary }]}>
-                          {activity.time}
-                        </Text>
+              {post.tripDetails?.itinerary && post.tripDetails.itinerary.length > 0 ? (
+                post.tripDetails.itinerary.map((day, idx) => (
+                  <View key={idx} style={styles.dayContainer}>
+                    {/* Day Header */}
+                    <View style={[styles.dayHeader, { backgroundColor: colors.card }, shadows.sm]}>
+                      <View style={[styles.dayBadge, { backgroundColor: colors.primary }]}>
+                        <Text style={styles.dayBadgeText}>Day {day.day}</Text>
                       </View>
-                      <Text style={[styles.activityName, { color: colors.text }]}>
-                        {activity.activity}
+                      <Text style={[styles.dayTitle, { color: colors.text }]}>
+                        {day.title || `Day ${day.day} Activities`}
                       </Text>
-                      <View style={styles.locationRow}>
-                        <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-                        <Text style={[styles.activityLocation, { color: colors.textSecondary }]}>
-                          {activity.location}
-                        </Text>
-                      </View>
                     </View>
-                  ))}
+
+                    {/* Activities */}
+                    <View style={[styles.activityItem, { backgroundColor: colors.card }, shadows.sm]}>
+                      <Text style={[styles.activityName, { color: colors.text }]}>
+                        {day.activities || 'No activities listed'}
+                      </Text>
+                      {day.budget > 0 && (
+                        <View style={styles.locationRow}>
+                          <Ionicons name="wallet-outline" size={14} color={colors.textSecondary} />
+                          <Text style={[styles.activityLocation, { color: colors.textSecondary }]}>
+                            Budget: NPR {day.budget.toLocaleString()}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <View style={styles.emptyVlog}>
+                  <Ionicons name="map-outline" size={64} color={colors.textSecondary} />
+                  <Text style={[styles.emptyVlogText, { color: colors.textSecondary }]}>
+                    No itinerary available for this trip.
+                  </Text>
                 </View>
-              ))}
+              )}
             </View>
           )}
 
           {activeTab === 'budget' && (
             <View style={styles.tabContent}>
-              {/* Total Cost */}
-              <View style={[styles.totalCostContainer, { backgroundColor: colors.primary }]}>
-                <Text style={styles.totalLabel}>Total Cost</Text>
-                <Text style={styles.totalAmount}>
-                  {trip.currency} {trip.budget.total.toLocaleString()}
-                </Text>
-                <Text style={styles.perPersonText}>
-                  {trip.currency} {trip.budget.perPerson.toLocaleString()} per person
-                </Text>
-              </View>
-
-              {/* Budget Items */}
-              <View style={styles.section}>
-                <Text style={[styles.sectionTitle, { color: colors.text }]}>Breakdown</Text>
-                {[
-                  { label: 'Accommodation', amount: trip.budget.accommodation, icon: 'bed-outline', color: '#2679FF' },
-                  { label: 'Food', amount: trip.budget.food, icon: 'restaurant-outline', color: '#00C896' },
-                  { label: 'Transport', amount: trip.budget.transport, icon: 'car-outline', color: '#FF9500' },
-                  { label: 'Activities', amount: trip.budget.activities, icon: 'bicycle-outline', color: '#FF3B30' },
-                ].map((item, idx) => (
-                  <View 
-                    key={idx} 
-                    style={[styles.budgetItem, { backgroundColor: colors.card }, shadows.sm]}
-                  >
-                    <View style={[styles.budgetIcon, { backgroundColor: item.color + '20' }]}>
-                      <Ionicons name={item.icon} size={22} color={item.color} />
-                    </View>
-                    <View style={styles.budgetDetails}>
-                      <Text style={[styles.budgetLabel, { color: colors.text }]}>{item.label}</Text>
-                      <Text style={[styles.budgetAmount, { color: colors.textSecondary }]}>
-                        {((item.amount / trip.budget.total) * 100).toFixed(0)}% of total
-                      </Text>
-                    </View>
-                    <Text style={[styles.budgetValue, { color: colors.text }]}>
-                      {trip.currency} {item.amount.toLocaleString()}
+              {post.tripDetails?.budget ? (
+                <>
+                  {/* Total Cost */}
+                  <View style={[styles.totalCostContainer, { backgroundColor: colors.primary }]}>
+                    <Text style={styles.totalLabel}>Total Cost</Text>
+                    <Text style={styles.totalAmount}>
+                      {post.tripDetails.budget.currency || 'NPR'} {(post.tripDetails.budget.amount || 0).toLocaleString()}
+                    </Text>
+                    <Text style={styles.perPersonText}>
+                      Estimated budget for your trip
                     </Text>
                   </View>
-                ))}
-              </View>
 
-              {/* Tips */}
-              <View style={[styles.tipsContainer, { backgroundColor: colors.backgroundAlt }]}>
-                <View style={styles.tipsHeader}>
-                  <Ionicons name="bulb-outline" size={20} color={colors.primary} />
-                  <Text style={[styles.tipsTitle, { color: colors.text }]}>Money Saving Tips</Text>
+                  {/* Budget Items - Only show if breakdown exists */}
+                  {post.tripDetails.budget.breakdown && (
+                    <View style={styles.section}>
+                      <Text style={[styles.sectionTitle, { color: colors.text }]}>Breakdown</Text>
+                      {[
+                        { 
+                          label: 'Accommodation', 
+                          amount: post.tripDetails.budget.breakdown.accommodation || 0, 
+                          icon: 'bed-outline', 
+                          color: '#2679FF' 
+                        },
+                        { 
+                          label: 'Food', 
+                          amount: post.tripDetails.budget.breakdown.food || 0, 
+                          icon: 'restaurant-outline', 
+                          color: '#00C896' 
+                        },
+                        { 
+                          label: 'Transport', 
+                          amount: post.tripDetails.budget.breakdown.transport || 0, 
+                          icon: 'car-outline', 
+                          color: '#FF9500' 
+                        },
+                        { 
+                          label: 'Activities', 
+                          amount: post.tripDetails.budget.breakdown.activities || 0, 
+                          icon: 'bicycle-outline', 
+                          color: '#FF3B30' 
+                        },
+                      ].filter(item => item.amount > 0).map((item, idx) => {
+                        const total = post.tripDetails.budget.amount || 1;
+                        return (
+                          <View 
+                            key={idx} 
+                            style={[styles.budgetItem, { backgroundColor: colors.card }, shadows.sm]}
+                          >
+                            <View style={[styles.budgetIcon, { backgroundColor: item.color + '20' }]}>
+                              <Ionicons name={item.icon} size={22} color={item.color} />
+                            </View>
+                            <View style={styles.budgetDetails}>
+                              <Text style={[styles.budgetLabel, { color: colors.text }]}>{item.label}</Text>
+                              <Text style={[styles.budgetAmount, { color: colors.textSecondary }]}>
+                                {((item.amount / total) * 100).toFixed(0)}% of total
+                              </Text>
+                            </View>
+                            <Text style={[styles.budgetValue, { color: colors.text }]}>
+                              {post.tripDetails.budget.currency || 'NPR'} {item.amount.toLocaleString()}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+
+                  {/* Tips */}
+                  <View style={[styles.tipsContainer, { backgroundColor: colors.backgroundAlt }]}>
+                    <View style={styles.tipsHeader}>
+                      <Ionicons name="bulb-outline" size={20} color={colors.primary} />
+                      <Text style={[styles.tipsTitle, { color: colors.text }]}>Money Saving Tips</Text>
+                    </View>
+                    <Text style={[styles.tipsText, { color: colors.textSecondary }]}>
+                      • Book accommodation 2 weeks in advance{'\n'}
+                      • Eat at local restaurants{'\n'}
+                      • Use shared transport{'\n'}
+                      • Look for group discounts
+                    </Text>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.emptyVlog}>
+                  <Ionicons name="wallet-outline" size={64} color={colors.textSecondary} />
+                  <Text style={[styles.emptyVlogText, { color: colors.textSecondary }]}>
+                    No budget information available for this trip.
+                  </Text>
                 </View>
-                <Text style={[styles.tipsText, { color: colors.textSecondary }]}>
-                  • Book accommodation 2 weeks in advance{'\n'}
-                  • Eat at local restaurants{'\n'}
-                  • Use shared transport{'\n'}
-                  • Look for group discounts
-                </Text>
-              </View>
+              )}
             </View>
           )}
         </View>
@@ -460,6 +573,7 @@ const PostDetailsScreen = () => {
         {/* Bottom Padding */}
         <View style={{ height: 40 }} />
       </ScrollView>
+      )}
     </View>
   );
 };
@@ -467,6 +581,34 @@ const PostDetailsScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  // Loading & Error States
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+  },
+  loadingText: {
+    marginTop: SPACING.md,
+    fontSize: FONT_SIZES.md,
+  },
+  errorText: {
+    marginTop: SPACING.md,
+    fontSize: FONT_SIZES.lg,
+    fontWeight: FONT_WEIGHTS.semibold,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: SPACING.lg,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.semibold,
   },
   // Simple Header
   header: {
@@ -493,7 +635,6 @@ const styles = StyleSheet.create({
   imageContainer: {
     width: width,
     height: width * 0.75,
-    overflow: 'hidden',
   },
   mainImage: {
     width: '100%',
@@ -519,6 +660,27 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: FONT_SIZES.md,
+  },
+  description: {
+    fontSize: FONT_SIZES.md,
+    lineHeight: 22,
+    marginTop: SPACING.sm,
+  },
+  // Interests
+  interestsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.sm,
+    marginBottom: SPACING.lg,
+  },
+  interestTag: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: BORDER_RADIUS.round,
+  },
+  interestText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: FONT_WEIGHTS.medium,
   },
   // Quick Info
   quickInfoRow: {
@@ -865,6 +1027,24 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.md,
     marginTop: SPACING.md,
     textAlign: 'center',
+  },
+  videoLoadingContainer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  soundButton: {
+    position: 'absolute',
+    bottom: SPACING.md,
+    left: SPACING.md,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
 });
 

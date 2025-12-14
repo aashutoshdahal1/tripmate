@@ -56,7 +56,12 @@ const CreatePostScreen = () => {
       activities: '',
     },
     interests: [],
+    vlogs: [], // Array of {uri, type, thumbnail, duration, title}
+    itinerary: [], // Array of {day, title, activities}
   });
+
+  const [uploadingVlog, setUploadingVlog] = useState(false);
+  const [vlogProgress, setVlogProgress] = useState(0);
 
   const videoRef = useRef(null);
   const scrollRef = useRef(null);
@@ -164,6 +169,110 @@ const CreatePostScreen = () => {
       interests: prev.interests.includes(id)
         ? prev.interests.filter(i => i !== id)
         : [...prev.interests, id],
+    }));
+  };
+
+  // Handle vlog selection and upload
+  const handleAddVlog = async () => {
+    try {
+      setUploadingVlog(true);
+      const result = await pickMedia('video');
+      
+      if (result) {
+        // Upload to Cloudinary
+        const cloudinaryResult = await uploadMediaToCloudinary(
+          result.uri,
+          result.type,
+          (progress) => setVlogProgress(progress)
+        );
+
+        // Add to vlogs array
+        const newVlog = {
+          uri: cloudinaryResult.url,
+          thumbnail: cloudinaryResult.thumbnail,
+          duration: cloudinaryResult.duration,
+          publicId: cloudinaryResult.publicId,
+          title: '', // User can edit later
+        };
+
+        setFormData(prev => ({
+          ...prev,
+          vlogs: [...prev.vlogs, newVlog],
+        }));
+
+        Alert.alert('Success', 'Vlog added successfully!');
+      }
+    } catch (error) {
+      console.error('❌ VLOG UPLOAD ERROR:', error);
+      Alert.alert('Error', 'Failed to upload vlog. Please try again.');
+    } finally {
+      setUploadingVlog(false);
+      setVlogProgress(0);
+    }
+  };
+
+  // Remove vlog from array
+  const handleRemoveVlog = (index) => {
+    Alert.alert(
+      'Remove Vlog',
+      'Are you sure you want to remove this vlog?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setFormData(prev => ({
+              ...prev,
+              vlogs: prev.vlogs.filter((_, i) => i !== index),
+            }));
+          },
+        },
+      ]
+    );
+  };
+
+  // Update vlog title
+  const handleUpdateVlogTitle = (index, title) => {
+    setFormData(prev => ({
+      ...prev,
+      vlogs: prev.vlogs.map((vlog, i) => 
+        i === index ? { ...vlog, title } : vlog
+      ),
+    }));
+  };
+
+  // Add itinerary day
+  const handleAddItineraryDay = () => {
+    const newDay = {
+      day: formData.itinerary.length + 1,
+      title: '',
+      activities: '',
+    };
+    
+    setFormData(prev => ({
+      ...prev,
+      itinerary: [...prev.itinerary, newDay],
+    }));
+  };
+
+  // Update itinerary day
+  const handleUpdateItinerary = (index, field, value) => {
+    setFormData(prev => ({
+      ...prev,
+      itinerary: prev.itinerary.map((item, i) => 
+        i === index ? { ...item, [field]: value } : item
+      ),
+    }));
+  };
+
+  // Remove itinerary day
+  const handleRemoveItineraryDay = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      itinerary: prev.itinerary
+        .filter((_, i) => i !== index)
+        .map((item, i) => ({ ...item, day: i + 1 })), // Re-index days
     }));
   };
 
@@ -288,7 +397,9 @@ const CreatePostScreen = () => {
             },
           } : undefined,
           interests: formData.interests,
+          itinerary: formData.itinerary.length > 0 ? formData.itinerary : undefined,
         },
+        vlogs: formData.vlogs.length > 0 ? formData.vlogs : undefined,
       };
 
       console.log('📝 CREATING POST...', postData);
@@ -336,6 +447,8 @@ const CreatePostScreen = () => {
           activities: '',
         },
         interests: [],
+        vlogs: [],
+        itinerary: [],
       });
       setStep(1);
 
@@ -918,6 +1031,184 @@ const CreatePostScreen = () => {
             ))}
           </View>
         </View>
+
+        {/* Vlogs Section (Optional) */}
+        <View style={styles.vlogsSection}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.xs }}>
+              <Ionicons name="play-circle" size={20} color={colors.accent} />
+              <Text style={[styles.sectionLabel, { marginBottom: 0, marginLeft: 0, color: colors.text }]}>
+                Trip Vlogs
+              </Text>
+            </View>
+            <View style={[styles.optionalBadge, { backgroundColor: colors.primaryAlpha }]}>
+              <Text style={[styles.optionalBadgeText, { color: colors.primary }]}>Optional</Text>
+            </View>
+          </View>
+          <Text style={[styles.sectionHint, { color: colors.textSecondary }]}>
+            Add video vlogs to showcase your trip moments
+          </Text>
+
+          {formData.vlogs.length === 0 ? (
+            <TouchableOpacity
+              style={[styles.addButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={handleAddVlog}
+              disabled={uploadingVlog}
+              activeOpacity={0.7}
+            >
+              {uploadingVlog ? (
+                <>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={[styles.addButtonText, { color: colors.textSecondary }]}>
+                    {vlogProgress > 0 ? `Uploading ${Math.round(vlogProgress)}%` : 'Processing...'}
+                  </Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
+                  <Text style={[styles.addButtonText, { color: colors.text }]}>
+                    Add First Vlog
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+          ) : (
+            <>
+              {formData.vlogs.map((vlog, index) => (
+                <View key={index} style={[styles.vlogItem, { backgroundColor: colors.card }]}>
+                  <Image 
+                    source={{ uri: vlog.thumbnail || vlog.uri }} 
+                    style={styles.vlogThumbnailSmall}
+                  />
+                  <View style={styles.vlogItemContent}>
+                    <TextInput
+                      style={[styles.vlogTitleInput, { color: colors.text }]}
+                      placeholder={`Vlog ${index + 1} title...`}
+                      placeholderTextColor={colors.textLight}
+                      value={vlog.title}
+                      onChangeText={(text) => handleUpdateVlogTitle(index, text)}
+                      maxLength={50}
+                    />
+                    {vlog.duration && (
+                      <Text style={[styles.vlogDuration, { color: colors.textSecondary }]}>
+                        {Math.floor(vlog.duration / 60)}:{String(Math.floor(vlog.duration % 60)).padStart(2, '0')}
+                      </Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => handleRemoveVlog(index)}
+                  >
+                    <Ionicons name="close-circle" size={24} color="#FF3B30" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              
+              <TouchableOpacity
+                style={[styles.addMoreButton, { backgroundColor: colors.primaryAlpha }]}
+                onPress={handleAddVlog}
+                disabled={uploadingVlog}
+                activeOpacity={0.7}
+              >
+                {uploadingVlog ? (
+                  <>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={[styles.addMoreButtonText, { color: colors.primary }]}>
+                      {vlogProgress > 0 ? `${Math.round(vlogProgress)}%` : 'Processing...'}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Ionicons name="add" size={20} color={colors.primary} />
+                    <Text style={[styles.addMoreButtonText, { color: colors.primary }]}>
+                      Add Another Vlog
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+
+        {/* Itinerary Section (Optional) */}
+        <View style={styles.itinerarySection}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: SPACING.xs }}>
+              <Ionicons name="list" size={20} color="#FF9500" />
+              <Text style={[styles.sectionLabel, { marginBottom: 0, marginLeft: 0, color: colors.text }]}>
+                Trip Itinerary
+              </Text>
+            </View>
+            <View style={[styles.optionalBadge, { backgroundColor: colors.primaryAlpha }]}>
+              <Text style={[styles.optionalBadgeText, { color: colors.primary }]}>Optional</Text>
+            </View>
+          </View>
+          <Text style={[styles.sectionHint, { color: colors.textSecondary }]}>
+            Share your day-by-day plan
+          </Text>
+
+          {formData.itinerary.length === 0 ? (
+            <TouchableOpacity
+              style={[styles.addButton, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={handleAddItineraryDay}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add-circle-outline" size={24} color="#FF9500" />
+              <Text style={[styles.addButtonText, { color: colors.text }]}>
+                Add Day 1
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <>
+              {formData.itinerary.map((item, index) => (
+                <View key={index} style={[styles.itineraryItem, { backgroundColor: colors.card }]}>
+                  <View style={styles.itineraryHeader}>
+                    <View style={[styles.dayBadgeSmall, { backgroundColor: '#FF9500' }]}>
+                      <Text style={styles.dayBadgeSmallText}>Day {item.day}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveItineraryDay(index)}
+                    >
+                      <Ionicons name="close-circle" size={24} color="#FF3B30" />
+                    </TouchableOpacity>
+                  </View>
+                  
+                  <TextInput
+                    style={[styles.itineraryTitleInput, { color: colors.text, backgroundColor: colors.background }]}
+                    placeholder="Day title (e.g., Arrival & Exploration)"
+                    placeholderTextColor={colors.textLight}
+                    value={item.title}
+                    onChangeText={(text) => handleUpdateItinerary(index, 'title', text)}
+                    maxLength={100}
+                  />
+                  
+                  <TextInput
+                    style={[styles.itineraryActivitiesInput, { color: colors.text, backgroundColor: colors.background }]}
+                    placeholder="Activities for this day..."
+                    placeholderTextColor={colors.textLight}
+                    value={item.activities}
+                    onChangeText={(text) => handleUpdateItinerary(index, 'activities', text)}
+                    multiline
+                    numberOfLines={3}
+                    maxLength={300}
+                  />
+                </View>
+              ))}
+              
+              <TouchableOpacity
+                style={[styles.addMoreButton, { backgroundColor: '#FF950020' }]}
+                onPress={handleAddItineraryDay}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="add" size={20} color="#FF9500" />
+                <Text style={[styles.addMoreButtonText, { color: '#FF9500' }]}>
+                  Add Day {formData.itinerary.length + 1}
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
       </ScrollView>
 
       <View style={styles.buttonRow}>
@@ -1012,6 +1303,8 @@ const CreatePostScreen = () => {
                 activities: '',
               },
               interests: [],
+              vlogs: [],
+              itinerary: [],
             });
             setStep(1);
           }}
@@ -1063,6 +1356,8 @@ const CreatePostScreen = () => {
                 activities: '',
               },
               interests: [],
+              vlogs: [],
+              itinerary: [],
             });
           } else {
             navigation.goBack();
@@ -1548,6 +1843,127 @@ const styles = StyleSheet.create({
   doneButtonText: {
     fontSize: FONT_SIZES.md,
     fontWeight: FONT_WEIGHTS.semibold,
+  },
+  // Vlogs Section
+  vlogsSection: {
+    marginTop: SPACING.xl,
+    marginBottom: SPACING.lg,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  optionalBadge: {
+    paddingHorizontal: SPACING.sm,
+    paddingVertical: 2,
+    borderRadius: BORDER_RADIUS.sm,
+  },
+  optionalBadgeText: {
+    fontSize: FONT_SIZES.xs,
+    fontWeight: FONT_WEIGHTS.bold,
+    textTransform: 'uppercase',
+  },
+  sectionHint: {
+    fontSize: FONT_SIZES.xs,
+    marginBottom: SPACING.md,
+    fontStyle: 'italic',
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.lg,
+    borderRadius: BORDER_RADIUS.lg,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+  },
+  addButtonText: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  vlogItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+    marginBottom: SPACING.sm,
+    gap: SPACING.md,
+  },
+  vlogThumbnailSmall: {
+    width: 80,
+    height: 60,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  vlogItemContent: {
+    flex: 1,
+  },
+  vlogTitleInput: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.medium,
+    marginBottom: SPACING.xs,
+  },
+  vlogDuration: {
+    fontSize: FONT_SIZES.xs,
+  },
+  removeButton: {
+    padding: SPACING.xs,
+  },
+  addMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+    marginTop: SPACING.sm,
+  },
+  addMoreButtonText: {
+    fontSize: FONT_SIZES.sm,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  // Itinerary Section
+  itinerarySection: {
+    marginTop: SPACING.xl,
+    marginBottom: SPACING.xxxl,
+  },
+  itineraryItem: {
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.lg,
+    marginBottom: SPACING.sm,
+  },
+  itineraryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  dayBadgeSmall: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.xs,
+    borderRadius: BORDER_RADIUS.md,
+  },
+  dayBadgeSmallText: {
+    color: '#FFFFFF',
+    fontSize: FONT_SIZES.xs,
+    fontWeight: FONT_WEIGHTS.bold,
+    textTransform: 'uppercase',
+  },
+  itineraryTitleInput: {
+    fontSize: FONT_SIZES.md,
+    fontWeight: FONT_WEIGHTS.semibold,
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.sm,
+  },
+  itineraryActivitiesInput: {
+    fontSize: FONT_SIZES.sm,
+    padding: SPACING.sm,
+    borderRadius: BORDER_RADIUS.md,
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
 });
 

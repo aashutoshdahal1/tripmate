@@ -86,6 +86,13 @@ const PostSchema = new mongoose.Schema({
       budget: Number,
     }],
   },
+  vlogs: [{
+    uri: String,
+    thumbnail: String,
+    duration: Number,
+    publicId: String,
+    title: String,
+  }],
   stats: {
     views: {
       type: Number,

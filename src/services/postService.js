@@ -502,6 +502,27 @@ export const getFeedPosts = async (page = 1, limit = 10) => {
   }
 };
 
+// 📄 GET SINGLE POST BY ID
+export const getPostById = async (postId) => {
+  try {
+    console.log('📄 FETCHING POST BY ID:', postId);
+
+    const response = await fetch(getApiUrl(`/posts/${postId}`));
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to fetch post');
+    }
+
+    console.log('✅ POST FETCHED:', data.data._id);
+    return data.data; // Return just the post data
+  } catch (error) {
+    console.error('❌ GET POST BY ID ERROR:', error);
+    throw error;
+  }
+};
+
 // 🗑️ DELETE POST
 export const deletePost = async (postId, token) => {
   try {
